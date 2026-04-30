@@ -1,0 +1,164 @@
+{
+  "dtype_bytes": 2,
+  "seq_lens": [
+    2048,
+    8192,
+    32768,
+    131072
+  ],
+  "rows": [
+    {
+      "model": "GPT-2 small",
+      "n_layers": 12,
+      "n_attn_heads": 12,
+      "n_kv_heads": 12,
+      "head_dim": 64,
+      "params_B": 0.124,
+      "note": "MHA",
+      "kv_bytes_per_token": 36864,
+      "kv_bytes_at_lens": {
+        "2048": 75497472,
+        "8192": 301989888,
+        "32768": 1207959552,
+        "131072": 4831838208
+      },
+      "weight_bytes_fp16": 248000000
+    },
+    {
+      "model": "GPT-2 XL",
+      "n_layers": 48,
+      "n_attn_heads": 25,
+      "n_kv_heads": 25,
+      "head_dim": 64,
+      "params_B": 1.5,
+      "note": "MHA",
+      "kv_bytes_per_token": 307200,
+      "kv_bytes_at_lens": {
+        "2048": 629145600,
+        "8192": 2516582400,
+        "32768": 10066329600,
+        "131072": 40265318400
+      },
+      "weight_bytes_fp16": 3000000000
+    },
+    {
+      "model": "Llama-1 7B",
+      "n_layers": 32,
+      "n_attn_heads": 32,
+      "n_kv_heads": 32,
+      "head_dim": 128,
+      "params_B": 7.0,
+      "note": "MHA",
+      "kv_bytes_per_token": 524288,
+      "kv_bytes_at_lens": {
+        "2048": 1073741824,
+        "8192": 4294967296,
+        "32768": 17179869184,
+        "131072": 68719476736
+      },
+      "weight_bytes_fp16": 14000000000
+    },
+    {
+      "model": "Llama-2 7B",
+      "n_layers": 32,
+      "n_attn_heads": 32,
+      "n_kv_heads": 32,
+      "head_dim": 128,
+      "params_B": 7.0,
+      "note": "MHA",
+      "kv_bytes_per_token": 524288,
+      "kv_bytes_at_lens": {
+        "2048": 1073741824,
+        "8192": 4294967296,
+        "32768": 17179869184,
+        "131072": 68719476736
+      },
+      "weight_bytes_fp16": 14000000000
+    },
+    {
+      "model": "Llama-2 70B",
+      "n_layers": 80,
+      "n_attn_heads": 64,
+      "n_kv_heads": 8,
+      "head_dim": 128,
+      "params_B": 70.0,
+      "note": "GQA 8:1",
+      "kv_bytes_per_token": 327680,
+      "kv_bytes_at_lens": {
+        "2048": 671088640,
+        "8192": 2684354560,
+        "32768": 10737418240,
+        "131072": 42949672960
+      },
+      "weight_bytes_fp16": 140000000000
+    },
+    {
+      "model": "Llama-3 8B",
+      "n_layers": 32,
+      "n_attn_heads": 32,
+      "n_kv_heads": 8,
+      "head_dim": 128,
+      "params_B": 8.0,
+      "note": "GQA 4:1",
+      "kv_bytes_per_token": 131072,
+      "kv_bytes_at_lens": {
+        "2048": 268435456,
+        "8192": 1073741824,
+        "32768": 4294967296,
+        "131072": 17179869184
+      },
+      "weight_bytes_fp16": 16000000000
+    },
+    {
+      "model": "Llama-3 70B",
+      "n_layers": 80,
+      "n_attn_heads": 64,
+      "n_kv_heads": 8,
+      "head_dim": 128,
+      "params_B": 70.0,
+      "note": "GQA 8:1",
+      "kv_bytes_per_token": 327680,
+      "kv_bytes_at_lens": {
+        "2048": 671088640,
+        "8192": 2684354560,
+        "32768": 10737418240,
+        "131072": 42949672960
+      },
+      "weight_bytes_fp16": 140000000000
+    },
+    {
+      "model": "Qwen2.5 7B",
+      "n_layers": 28,
+      "n_attn_heads": 28,
+      "n_kv_heads": 4,
+      "head_dim": 128,
+      "params_B": 7.6,
+      "note": "GQA 7:1",
+      "kv_bytes_per_token": 57344,
+      "kv_bytes_at_lens": {
+        "2048": 117440512,
+        "8192": 469762048,
+        "32768": 1879048192,
+        "131072": 7516192768
+      },
+      "weight_bytes_fp16": 15200000000
+    },
+    {
+      "model": "Mistral 7B",
+      "n_layers": 32,
+      "n_attn_heads": 32,
+      "n_kv_heads": 8,
+      "head_dim": 128,
+      "params_B": 7.3,
+      "note": "GQA 4:1",
+      "kv_bytes_per_token": 131072,
+      "kv_bytes_at_lens": {
+        "2048": 268435456,
+        "8192": 1073741824,
+        "32768": 4294967296,
+        "131072": 17179869184
+      },
+      "weight_bytes_fp16": 14600000000
+    }
+  ]
+}
