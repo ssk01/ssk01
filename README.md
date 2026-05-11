@@ -14,6 +14,7 @@ Learning by doing. Each sub-directory is an independent experiment.
 | [kv-cache](2026/kv-cache/) | Python | KV cache 完整 demo — 手写单层 attention 验证机制 + GPT-2 真实延迟对比（5x 加速）+ 多模型显存账本（含 GQA） |
 | [microgpt.py](2026/microgpt.py) | Python | 从零实现的微型 GPT — 纯 Python 无依赖，手写 autograd + 字符级语言模型 |
 | [bili-views](2026/bili-views/) | TypeScript | B站实时在线观看人数统计系统 — Express + Redis + WebSocket |
+| [FM](https://github.com/ssk01/FM) | Python | MF / FM / 双塔 — 向量化召回/粗排/排序 Demo |
 
 ## 2025
 
@@ -23,3 +24,4 @@ Learning by doing. Each sub-directory is an independent experiment.
 | [sort.ipynb](2025/sort.ipynb) | Python | 分析 branchless sorting 为什么快：分支预测代价量化，验证 Jeff Dean 的性能估算模型 |
 | [leet_168](2025/leet_168_excel-sheel-column-title.ipynb) | Python | LeetCode 168: Excel 列号转换 (整数 → "ZY") |
 | [leet_365](2025/leet_365_water-and-jug-problem.ipynb) | Python | LeetCode 365: 水壶问题 (BFS 搜索) |
+
