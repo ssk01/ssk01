@@ -9,12 +9,16 @@ Learning by doing. Each sub-directory is an independent experiment.
 | Project | Language | Description |
 |---------|----------|-------------|
 | [autograd](2026/autograd/) | Python | 动态图 vs 静态图 autograd 玩具实现 — 手写计算图、反向传播、if 分支对比，演示 PyTorch vs TF 1.x 的核心差异 |
+| [bili-views](2026/bili-views/) | TypeScript | B站实时在线观看人数统计系统 — Express + Redis + WebSocket |
 | [cache-friendly-layout](2026/cache-friendly-layout/) | C++ | 验证 [Bun Install 博客](https://bun.com/blog/behind-the-scenes-of-bun-install) 中 cache-friendly 数据布局的优化效果：AoS vs SoA、HashMap vs flat array、JSON 对象树 vs SoA+字符串池、真实依赖树遍历 |
+| [CacheLib](https://github.com/facebook/CacheLib) | Markdown | Meta CacheLib (in-process C++ 缓存引擎) 源码解读 — 存储引擎/Navy I/O/并发模型/设计取舍；笔记：[2026/cachelib/](2026/cachelib/) |
+| [chaoba](https://github.com/ssk01/chaoba) | Python | 最小中文分词器 demo — 词图 DAG + Viterbi 最短路径，~100 行复现 jieba/HanLP 核心机制 |
+| [FM](https://github.com/ssk01/FM) | Python | MF / FM / 双塔 — 向量化召回/粗排/排序 Demo |
 | [go](2026/go/) | Python | AlphaGo Zero 风格的围棋 AI — MCTS + 神经网络自我对弈训练 |
 | [kv-cache](2026/kv-cache/) | Python | KV cache 完整 demo — 手写单层 attention 验证机制 + GPT-2 真实延迟对比（5x 加速）+ 多模型显存账本（含 GQA） |
 | [microgpt.py](2026/microgpt.py) | Python | 从零实现的微型 GPT — 纯 Python 无依赖，手写 autograd + 字符级语言模型 |
-| [bili-views](2026/bili-views/) | TypeScript | B站实时在线观看人数统计系统 — Express + Redis + WebSocket |
-| [FM](https://github.com/ssk01/FM) | Python | MF / FM / 双塔 — 向量化召回/粗排/排序 Demo |
+| [mini-lucene](https://github.com/ssk01/mini-lucene) | C++ | C++17 重写 Apache Lucene 1.0.1 — 完整检索路径 + 多 agent 协作研究（deepseek 实现 / claude review） |
+| [trie](https://github.com/ssk01/trie) | C++ | 26-路 Trie + Aho-Corasick C++17 实现 — 在 `/usr/share/dict/words` 和 Moby Dick 上 5 类场景对照 `unordered_set/map` |
 
 ## 2025
 
