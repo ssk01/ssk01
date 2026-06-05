@@ -8,6 +8,7 @@ Learning by doing. Each sub-directory is an independent experiment.
 
 | Project | Language | Description |
 |---------|----------|-------------|
+| [linear-scan-regalloc](2026/linear-scan-regalloc/) | Python (Jupyter) | 线性扫描寄存器分配算法学习笔记 — 从 Tiger 编译器出发，实现 live intervals 计算 + 线性扫描 + farthest-end spill heuristic + 指令改写，含 5 组测试 |
 | [CacheLib](https://github.com/facebook/CacheLib) | Markdown | Meta CacheLib (in-process C++ 缓存引擎) 源码解读 — 存储引擎/Navy I/O/并发模型/设计取舍；笔记：[CacheLib深度解析.md](2026/cachelib/CacheLib深度解析.md) |
 | [chaoba](https://github.com/ssk01/chaoba) | Python | 最小中文分词器 demo — 词图 DAG + Viterbi 最短路径，~100 行复现 jieba/HanLP 核心机制 |
 | [mini-lucene](https://github.com/ssk01/mini-lucene) | C++ | C++17 重写 Apache Lucene 1.0.1 — 完整检索路径 + 多 agent 协作研究（deepseek 实现 / claude review） |
