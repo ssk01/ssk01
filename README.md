@@ -8,6 +8,7 @@ Learning by doing. Each sub-directory is an independent experiment.
 
 | Project | Language | Description |
 |---------|----------|-------------|
+| [hospital](2026/hospital/) | Python | 医院排队叫号系统设计 — 多优先级队列 + 多科室分流 + 等候时间预估 |
 | [linear-scan-regalloc](2026/linear-scan-regalloc/) | Python (Jupyter) | 线性扫描寄存器分配算法学习笔记 — 从 Tiger 编译器出发，实现 live intervals 计算 + 线性扫描 + farthest-end spill heuristic + 指令改写，含 5 组测试 |
 | [sparse-embedding-demo](https://github.com/ssk01/sparse_embedding_demo) | Python | 推荐系统 Sparse Embedding × Parameter Server 教学 Demo — MovieLens 1M + 多进程 PS 架构，讲清 embedding 大表分片/worker pull-push |
 | [CacheLib](https://github.com/facebook/CacheLib) | Markdown | Meta CacheLib (in-process C++ 缓存引擎) 源码解读 — 存储引擎/Navy I/O/并发模型/设计取舍；笔记：[CacheLib深度解析.md](2026/cachelib/CacheLib深度解析.md) |
