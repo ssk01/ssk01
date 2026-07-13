@@ -9,6 +9,7 @@ Learning by doing. Each sub-directory is an independent experiment.
 
 | Project | Language | Description |
 |---------|----------|-------------|
+| [gemm](2026/gemm/) | C++ | GEMM 矩阵乘优化实验 — 从 naive 到 M4 Pro 上性能媲美 OpenMP，含 packA strides / tiling / vectorization / prefetch 多版本对比 |
 | [duckdb-learning](2026/duckdb-learning/) | C++ / Python | DuckDB 源码学习笔记 — 聚合性能对比 ClickHouse（查即算 vs 预聚合）、C++ 特性（optional_ptr/CRTP）、无锁队列设计、压缩算法（Dict/FSST）详解 |
 | [hospital](2026/hospital/) | Python | 医院排队叫号系统设计 — 多优先级队列 + 多科室分流 + 等候时间预估 |
 | [linear-scan-regalloc](2026/linear-scan-regalloc/) | Python (Jupyter) | 线性扫描寄存器分配算法学习笔记 — 从 Tiger 编译器出发，实现 live intervals 计算 + 线性扫描 + farthest-end spill heuristic + 指令改写，含 5 组测试 |
