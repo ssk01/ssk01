@@ -1,0 +1,4 @@
+gemm
+*.log
+experiments/v1_explore
+experiments/packa_stride
