@@ -4,7 +4,8 @@ Learning by doing. Each sub-directory is an independent experiment.
 
 > 建这个 repo 的初衷是自己动手写每一行代码来加深理解，但说实话，里面相当一部分项目已经是 vibe coding 了——和 AI 结对完成的。时代变了，Kaizen 的方式也在变。
 
-## 2026
+<details open>
+<summary><b>2026</b></summary>
 
 | Project | Language | Description |
 |---------|----------|-------------|
@@ -23,7 +24,10 @@ Learning by doing. Each sub-directory is an independent experiment.
 | [go](2026/go/) | Python | AlphaGo Zero 风格的围棋 AI — MCTS + 神经网络自我对弈训练 |
 | [microgpt.py](2026/microgpt.py) | Python | 从零实现的微型 GPT — 纯 Python 无依赖，手写 autograd + 字符级语言模型 |
 
-## 2025
+</details>
+
+<details>
+<summary><b>2025</b></summary>
 
 | Project | Language | Description |
 |---------|----------|-------------|
@@ -31,4 +35,6 @@ Learning by doing. Each sub-directory is an independent experiment.
 | [leet_168](2025/leet_168_excel-sheel-column-title.ipynb) | Python | LeetCode 168: Excel 列号转换 (整数 → "ZY") |
 | [leet_365](2025/leet_365_water-and-jug-problem.ipynb) | Python | LeetCode 365: 水壶问题 (BFS 搜索) |
 | [sort.ipynb](2025/sort.ipynb) | Python | 分析 branchless sorting 为什么快：分支预测代价量化，验证 Jeff Dean 的性能估算模型 |
+
+</details>
 
