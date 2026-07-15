@@ -1,6 +1,6 @@
 """
-V3: DeepRec-style 自动边界检测 + 改图
-=======================================
+V3: 自动边界检测 + pb 改写
+=============================
 自动分析计算图：从 user/item 输入出发标记每个节点的归属 (user/item/boundary)，
 在 boundary 节点处自动插入 broadcast 子图。不需要指定 user_tower/item_tower。
 

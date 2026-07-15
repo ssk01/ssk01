@@ -30,14 +30,15 @@ after:   user [1,3]  → user_tower → user_emb [1,16]  ─┤
 
 ## 三种实现
 
-三种实现最终产出同样的 saved_model 推理效果，区别在于**是否需要模型源码**和**通用性**。
-
-| | V1 Keras 原生 | V2 pb 改写 | V3 DeepRec-style |
+| | V1 Keras 原生 | V2 pb 改写 | V3 自动边界检测 |
 |---|---|---|---|
 | 文件 | `demo_compress.py` | `demo_compress_v2.py` | `demo_compress_v3.py` |
 | 需要模型源码 | 需要 | **不需要** | **不需要** |
 | 通用性 | 只能用于自己建的模型 | 需指定关键节点名 | **全自动**，只需标注 user/item 输入 |
-| 原理 | 共享 layer 引用，构建两条 forward | 解析 saved_model.pb → 找 concat 节点 → 插 broadcast 子图 | BFS 传播 user/item 归属 → 在 boundary 节点自动插 broadcast |
+| 时机 | 构建时定义两条 forward | 导出后改 pb | 导出后改 pb |
+| 原理 | 共享 layer 引用 | 解析 saved_model.pb → 找 concat → 插 broadcast | BFS 传播 user/item 归属 → 自动找 boundary → 插 broadcast |
+
+> **关于 DeepRec**：DeepRec 的 `enable_sample_awared_graph_compression` 是在**导出前**（`serving_input_receiver_fn` 阶段）对 live tensor 做图优化，压缩被烘进导出的 SavedModel。这里的 V2/V3 是对已导出的 pb 做后期改写，效果等价但时机不同。
 
 ### V1: Keras 原生 (demo_compress.py)
 
@@ -85,7 +86,7 @@ Shape(item_emb) → StridedSlice[0] → Pack([batch, emb_dim]) → BroadcastTo(u
 
 **优点**：不需要模型源码。**缺点**：需要知道关键节点的命名约定（如 `user_emb`、`concat`）。
 
-### V3: DeepRec-style 自动边界检测 (demo_compress_v3.py)
+### V3: 自动边界检测 (demo_compress_v3.py)
 
 完全自动化——只需告诉它 user/item 输入名，自动完成剩余步骤：
 
@@ -108,8 +109,8 @@ boundaries = analyzer.find_boundary_inputs()
 
 ## Benchmark
 
-| N | Naive | V1 Keras | V2 pb改写 | V3 DeepRec |
-|---|-------|----------|-----------|------------|
+| N | Naive | V1 Keras | V2 pb改写 | V3 自动 |
+|---|-------|----------|-----------|---------|
 | 100 | 0.27ms | 0.27ms | 0.31ms | 0.34ms |
 | 500 | 0.68ms | 0.70ms | 0.70ms | 0.71ms |
 | 1000 | 1.11ms | 1.00ms | 1.06ms | 1.05ms |
@@ -152,7 +153,7 @@ python demo_compress.py
 # V2: pb 改写（已有 compress_naive saved_model 即可）
 python demo_compress_v2.py
 
-# V3: DeepRec-style 自动检测
+# V3: 自动边界检测
 python demo_compress_v3.py
 ```
 
@@ -160,6 +161,6 @@ python demo_compress_v3.py
 
 - [demo_compress.py](demo_compress.py) — V1 Keras 原生实现
 - [demo_compress_v2.py](demo_compress_v2.py) — V2 pb 改写实现
-- [demo_compress_v3.py](demo_compress_v3.py) — V3 DeepRec-style 实现
+- [demo_compress_v3.py](demo_compress_v3.py) — V3 自动边界检测实现
 - [demo_compress_plan.md](demo_compress_plan.md) — 方案设计
 - [demo_two_tower.py](demo_two_tower.py) — 原始双塔 demo
