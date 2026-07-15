@@ -4,10 +4,13 @@
 按照「样本构造 → 训练(checkpoint) → 导出(saved_model) → 正向推理验证」
 四个阶段，用一个简单的双塔推荐模型走完整条链路。
 
-模型结构:
+模型结构 (Keras Functional API):
   user_feat(3) → Dense(32) → user_emb(16) ─┐
                                             ├─ concat → Dense(16) → Dense(8) → Dense(1) → sigmoid
   item_feat(3) → Dense(32) → item_emb(16) ─┘
+
+导出方式: model.save() — Functional API 建模时显式声明了多输入,
+Keras 自动生成正确的 serving_default 签名, 不需要手动构造图或 ExportRoot.
 
 运行:
     python demo_two_tower.py
@@ -121,134 +124,94 @@ def parse_tfrecord(serialized):
 #   - checkpoint 用于续训、容错恢复, 不适合直接拿去推理
 # ============================================================
 
-class TwoTowerModel(tf.keras.Model):
+def build_model():
     """
-    双塔模型:
-      - User Tower:  user_feat  → Dense → user_embedding
-      - Item Tower:  item_feat  → Dense → item_embedding
-      - 顶部 MLP:    concat(user_emb, item_emb) → Dense → ... → score
+    阶段 2 (前半): 用 Keras Functional API 定义双塔模型。
 
-    文档里反复强调"区分 user/item 特征"——这个区分会一路带到导出和压缩.
-
-    call 接受 (user_feat, item_feat) 两个独立张量,
-    对应文档中 signature 的两个独立输入 placeholder.
+    为什么用 Functional API 而非 Subclassing:
+      - Functional API 建模时显式声明了输入: Input(shape=(3,), name="user_feat")
+      - model.save() 能自动生成正确的 serving_default 签名
+      - 不需要 ExportRoot、不需要手写 tf.matmul、不需要手动建图
+      - 这是生产环境的标准做法
     """
-    def __init__(self, user_dim=USER_DIM, item_dim=ITEM_DIM):
-        super().__init__()
-        self.user_dim = user_dim
-        self.item_dim = item_dim
+    user_input = tf.keras.Input(shape=(3,), dtype=tf.float32, name="user_feat")
+    item_input = tf.keras.Input(shape=(3,), dtype=tf.float32, name="item_feat")
 
-        # User Tower
-        self.user_dense1 = tf.keras.layers.Dense(32, activation="relu", name="user_dense1")
-        self.user_dense2 = tf.keras.layers.Dense(user_dim, name="user_embedding")
+    # User Tower
+    u = tf.keras.layers.Dense(32, activation="relu", name="user_dense1")(user_input)
+    u = tf.keras.layers.Dense(USER_DIM, name="user_embedding")(u)
 
-        # Item Tower
-        self.item_dense1 = tf.keras.layers.Dense(32, activation="relu", name="item_dense1")
-        self.item_dense2 = tf.keras.layers.Dense(item_dim, name="item_embedding")
+    # Item Tower
+    i = tf.keras.layers.Dense(32, activation="relu", name="item_dense1")(item_input)
+    i = tf.keras.layers.Dense(ITEM_DIM, name="item_embedding")(i)
 
-        # 顶部 MLP: concat(user_emb, item_emb) → 16 → 8 → 1
-        self.top_dense1 = tf.keras.layers.Dense(16, activation="relu", name="top_dense1")
-        self.top_dense2 = tf.keras.layers.Dense(8, activation="relu", name="top_dense2")
-        self.top_out = tf.keras.layers.Dense(1, name="top_out")
+    # 顶部 MLP: concat → 16 → 8 → 1
+    x = tf.keras.layers.Concatenate(name="concat")([u, i])
+    x = tf.keras.layers.Dense(16, activation="relu", name="top_dense1")(x)
+    x = tf.keras.layers.Dense(8, activation="relu", name="top_dense2")(x)
+    logit = tf.keras.layers.Dense(1, name="top_out")(x)
+    scores = tf.keras.layers.Lambda(lambda t: tf.sigmoid(tf.squeeze(t, axis=1)), name="scores")(logit)
 
-    def call(self, user_feat, item_feat, training=False):
-        # User Tower: 输入维度 3 → 32 → user_dim
-        user_vec = self.user_dense1(user_feat)
-        user_vec = self.user_dense2(user_vec)
-
-        # Item Tower: 输入维度 3 → 32 → item_dim
-        item_vec = self.item_dense1(item_feat)
-        item_vec = self.item_dense2(item_vec)
-
-        # 顶部 MLP: concat → 16 → 8 → 1 → sigmoid
-        combined = tf.concat([user_vec, item_vec], axis=1)
-        x = self.top_dense1(combined)
-        x = self.top_dense2(x)
-        logit = self.top_out(x)
-        prob = tf.sigmoid(tf.squeeze(logit, axis=1))
-        return prob
-
-    def get_user_embedding(self, user_feat):
-        """单独获取 user 侧 embedding (导出时可用)"""
-        x = self.user_dense1(user_feat)
-        return self.user_dense2(x)
+    model = tf.keras.Model(inputs=[user_input, item_input], outputs=scores, name="two_tower")
+    return model
 
 
 def train_model():
     """
     阶段 2: 训练双塔模型, 产出 checkpoint.
-    
-    关键知识点:
-      - checkpoint 是"变量名→值"的映射, 包含 optimizer 状态 (Adam 的 m/v)
-      - checkpoint 不自包含图结构——推理时需要重构计算图
-      - 每个 epoch 保存一个 checkpoint, 取最优 step 的用于导出
+
+    Functional API 模型: model([user_feat, item_feat]) 或
+    model({"user_feat": ..., "item_feat": ...})
     """
     print("\n" + "=" * 60)
     print("阶段 2: 训练 (产出 checkpoint)")
     print("=" * 60)
 
-    # --- 构建数据集 ---
     raw_dataset = tf.data.TFRecordDataset([TFRECORD_PATH])
     dataset = (raw_dataset
                .map(parse_tfrecord, num_parallel_calls=tf.data.AUTOTUNE)
                .shuffle(512)
                .batch(BATCH_SIZE)
                .prefetch(tf.data.AUTOTUNE))
-    
-    # --- 模型 & 优化器 ---
-    model = TwoTowerModel()
+
+    model = build_model()
     optimizer = tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
-    loss_fn = tf.keras.losses.BinaryCrossentropy()
-    
-    # --- Checkpoint 管理 ---
-    # checkpoint 包含: 模型变量 + optimizer 变量 + global_step
-    checkpoint = tf.train.Checkpoint(
-        model=model,
-        optimizer=optimizer,
-        step=tf.Variable(0, dtype=tf.int64)
-    )
+
+    checkpoint = tf.train.Checkpoint(model=model, optimizer=optimizer)
+
+    # 先跑一个 batch 以初始化变量
+    for user_feat, item_feat, _ in dataset.take(1):
+        _ = model([user_feat, item_feat])
+
     ckpt_manager = tf.train.CheckpointManager(
         checkpoint, CHECKPOINT_DIR, max_to_keep=3
     )
-    
-    # --- 训练循环 ---
-    best_loss = float("inf")
-    best_step = 0
-    
+
     for epoch in range(EPOCHS):
         epoch_loss = 0.0
         n_batches = 0
-        
-        for batch_idx, (user_feat, item_feat, label) in enumerate(dataset):
-            checkpoint.step.assign_add(1)
-            
+
+        for user_feat, item_feat, label in dataset:
             with tf.GradientTape() as tape:
-                pred = model(user_feat, item_feat, training=True)
-                loss = loss_fn(label, pred)
-            
+                pred = model([user_feat, item_feat], training=True)
+                loss = tf.reduce_mean(tf.keras.losses.binary_crossentropy(label, pred))
+
             grads = tape.gradient(loss, model.trainable_variables)
             optimizer.apply_gradients(zip(grads, model.trainable_variables))
-            
+
             epoch_loss += loss.numpy()
             n_batches += 1
-        
+
         avg_loss = epoch_loss / n_batches
-        step_val = checkpoint.step.numpy()
-        
-        # 保存 checkpoint
         ckpt_path = ckpt_manager.save(checkpoint_number=epoch)
-        print(f"Epoch {epoch+1}/{EPOCHS} | loss={avg_loss:.4f} | step={step_val} | ckpt={ckpt_path}")
-        
-        if avg_loss < best_loss:
-            best_loss = avg_loss
-            best_step = step_val
-    
-    print(f"\n训练完成. 最优 loss={best_loss:.4f} (step={best_step})")
+        print(f"Epoch {epoch+1}/{EPOCHS} | loss={avg_loss:.4f} | ckpt={ckpt_path}")
+
+    print(f"\n训练完成.")
     print(f"checkpoint 目录内容: {os.listdir(CHECKPOINT_DIR)}")
     print(f"注意: checkpoint 包含 data-* (权重) + index (索引), 以及 optimizer 状态")
     print(f"      checkpoint 不自包含图结构, 不适合直接用于推理!")
-    
-    return model, checkpoint
+
+    return model
 
 
 # ============================================================
@@ -263,60 +226,19 @@ def train_model():
 
 def export_saved_model(model):
     """
-    阶段 3: 从训练好的模型导出 saved_model.
+    阶段 3: 导出 saved_model.
 
-    导出的核心操作:
-      1. 构建一个只含正向推理的签名函数 (forward inference graph)
-      2. 定义 signature: 输入张量名/类型/形状 → 输出张量
-      3. 保存为 saved_model 目录 (图 + 权重 + 签名)
-
-    key design:
-      - 用一个独立 tf.Module 做 save root, 把 serving 函数挂在它上面
-      - model 通过闭包被 serving 函数引用, 不直接作为 root 的子 module,
-        这样避免了 Keras 自动 serviving_default 的签名冲突
-      - TF 会遍历 ConcreteFunction 的图来发现所有变量,
-        所以 model 的权重仍然正确保存进 saved_model/variables/
+    Functional API 模型直接 model.save() 即可:
+      - 建模时 Input 层已经显式声明了输入名和 shape
+      - Keras 自动生成正确的 serving_default 签名
+      - 不需要 ExportRoot、不需要手写变量、不需要手写图
     """
     print("\n" + "=" * 60)
-    print("阶段 3: 导出 saved_model")
+    print("阶段 3: 导出 saved_model (model.save)")
     print("=" * 60)
 
     export_path = os.path.join(EXPORT_BASE_DIR, str(EXPORT_VERSION))
-
-    class ExportRoot(tf.Module):
-        """
-        导出用的 root object. 关键设计:
-        - 不把 Keras model 作为子模块 (避免 Keras 自动 serving_default 干扰)
-        - 直接把 model 的 layer 拿出来挂为独立子模块, 这样变量被正确追踪
-        - 正向推理逻辑直接写在 __call__ 里 (只含前向算子, 不含梯度/优化器)
-        """
-        def __init__(self, model):
-            super().__init__()
-            self.user_dense1 = model.user_dense1
-            self.user_dense2 = model.user_dense2
-            self.item_dense1 = model.item_dense1
-            self.item_dense2 = model.item_dense2
-            self.top_dense1 = model.top_dense1
-            self.top_dense2 = model.top_dense2
-            self.top_out = model.top_out
-
-        @tf.function(input_signature=[
-            tf.TensorSpec(shape=[None, 3], dtype=tf.float32, name="user_feat"),
-            tf.TensorSpec(shape=[None, 3], dtype=tf.float32, name="item_feat"),
-        ])
-        def __call__(self, user_feat, item_feat):
-            user_vec = self.user_dense2(self.user_dense1(user_feat))
-            item_vec = self.item_dense2(self.item_dense1(item_feat))
-            combined = tf.concat([user_vec, item_vec], axis=1)
-            x = self.top_dense1(combined)
-            x = self.top_dense2(x)
-            logit = self.top_out(x)
-            return {
-                "scores": tf.sigmoid(tf.squeeze(logit, axis=1)),
-            }
-
-    export_root = ExportRoot(model)
-    tf.saved_model.save(export_root, export_path)
+    model.export(export_path)
 
     print(f"saved_model 已导出到: {export_path}")
     print(f"\nsaved_model 目录结构:")
@@ -380,16 +302,17 @@ def verify_saved_model(model, export_path):
     test_user = np.random.randn(5, 3).astype(np.float32)
     test_item = np.random.randn(5, 3).astype(np.float32)
     
-    # 训练图前向 (直接从 model 对象调用, training=False)
-    train_pred = model(test_user, test_item, training=False).numpy()
+    # 训练图前向 (Functional API: 输入是 list)
+    train_pred = model([test_user, test_item], training=False).numpy()
     
-    # 导出图前向 (从 saved_model 加载后调用)
+    # 导出图前向 (model.export() 输出 key 为 output_0)
     serving_fn = loaded.signatures["serving_default"]
     serving_output = serving_fn(
         user_feat=tf.constant(test_user),
         item_feat=tf.constant(test_item),
     )
-    serving_pred = serving_output["scores"].numpy()
+    out_key = list(serving_output.keys())[0]
+    serving_pred = serving_output[out_key].numpy()
     
     # 比对打分
     print(f"\n训练图产出: {train_pred}")
@@ -431,7 +354,7 @@ def main():
     build_samples_tfrecord()
     
     # 阶段 2: 训练 (产出 checkpoint)
-    model, checkpoint = train_model()
+    model = train_model()
     
     # 阶段 3: 导出 saved_model
     export_path = export_saved_model(model)

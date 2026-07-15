@@ -169,58 +169,33 @@ TF1 的 checkpoint 则不同——格式是 `<scope>/<variable_name>` (如 `user
 
 `data-*` 文件里存放**变量的实际数值**，按 index 中记录的 offset + size 散布在文件中。文件内的顺序由变量名的**字典序**决定（因为 index 是有序的键值表）。
 
-本 demo 的 data 文件 (~26 KB) 内容分布：
+本 demo 的 data 文件 (~40 KB) 内容分布（Functional API 模型）：
 
 ```
 ┌──────────────────────────────────────────────────┐  offset=0
-│                                                  │
 │  _CHECKPOINTABLE_OBJECT_GRAPH                    │
 │  ───────────────────────────────                 │
 │  • 类型: protobuf string                         │
-│  • 内容: TrackableObjectGraph — 记录了所有       │
-│    被追踪对象的拓扑关系 (谁是谁的子模块、        │
-│    依赖关系、slot 变量归属)                      │
-│  • 用途: TF2 restore 时靠它重建对象层级图，       │
-│    知道 model.item_dense1 是 TwoTowerModel        │
-│    的 item_dense1 属性                           │
-│  • 大小: ~4 KB (varies)                          │
-│                                                  │
-├──────────────────────────────────────────────────┤  offset≈4000
-│                                                  │
-│  模型权重 (14 个) — 按字典序排列                  │
-│  ─────────────────────────────                   │
-│  model/item_dense1/bias          float32[32]      │
-│  model/item_dense1/kernel        float32[3,32]   │
-│  model/item_dense2/bias          float32[16]      │
-│  model/item_dense2/kernel        float32[32,16]  │
-│  model/top_dense1/bias           float32[16]      │
-│  model/top_dense1/kernel         float32[32,16]  │
-│  ... (其余 8 个)                                  │
+│  • 内容: TrackableObjectGraph — 记录对象拓扑     │
+│  • 大小: ~4 KB                                   │
+├──────────────────────────────────────────────────┤
+│  模型权重 (14 个) — optimizer/_trainable_variables/ 下 │
+│  按编号 0..13 排列:                              │
+│    0: [3,32]   1: [32]    2: [3,32]   3: [32]   │
+│    4: [32,16]  5: [16]    6: [32,16]  7: [16]   │
+│    8: [32,16]  9: [16]   10: [16,8]  11: [8]    │
+│   12: [8,1]   13: [1]                            │
 │  每个变量以 TensorProto 格式存储                  │
-│                                                  │
 ├──────────────────────────────────────────────────┤
-│                                                  │
-│  Optimizer slot 变量 (28 个) — Adam 的 m 和 v    │
-│  ───────────────────────────────────             │
-│  optimizer/_variables/2          float32[3,32]   │
-│  optimizer/_variables/3          float32[3,32]   │
-│  ... (其余 26 个)                                 │
-│  每个 slot 的 shape 与对应的权重完全一致           │
-│                                                  │
+│  Optimizer slot 变量 (28 个) — Adam m/v          │
+│  optimizer/_variables/2..29                      │
 ├──────────────────────────────────────────────────┤
-│                                                  │
-│  scalar 变量 (4 个)                               │
-│  ─────────────────                                │
-│  optimizer/_iterations           int64 标量       │
-│  optimizer/_learning_rate        float32 标量     │
-│  save_counter                    int64 标量       │
-│  step                            int64 标量       │
-│  标量用 protobuf varint 编码，不一定 4 bytes      │
-│                                                  │
+│  scalar 变量 (2 个)                               │
+│  optimizer/_iterations (int64),                  │
+│  optimizer/_learning_rate (float32)              │
+│  save_counter (int64)                            │
 └──────────────────────────────────────────────────┘
 ```
-
-**为什么是这个顺序？** index 文件内部按变量名的字典序组织键值对，data 文件中各变量的 offset 自然也是字典序递增的。所以你会看到 `model/...` (字母 m) 排在 `optimizer/...` (字母 o) 前面。
 
 ### 3.2 各变量详细说明
 
@@ -262,44 +237,40 @@ TF1 的 checkpoint 则不同——格式是 `<scope>/<variable_name>` (如 `user
 
 ## 4. 变量清单 (本 demo 的 ckpt-4 实际内容)
 
+> **注意**: Functional API 模型通过 `tf.train.Checkpoint(model=model, optimizer=optimizer)` 保存时，Keras 将模型权重注册为 optimizer 的 trainable variables——所以权重出现在 `optimizer/_trainable_variables/N/...` 下，而非 `model/...`。这与 Subclassing API 的行为不同。
+
 ```
-模型权重 (14 个) - 推理需要:
-  User Tower:
-    model/user_dense1/kernel       [3, 32]   = 384 bytes
-    model/user_dense1/bias         [32]      = 128 bytes
-    model/user_dense2/kernel       [32, 16]  = 2048 bytes
-    model/user_dense2/bias         [16]      = 64 bytes
-  Item Tower:
-    model/item_dense1/kernel       [3, 32]   = 384 bytes
-    model/item_dense1/bias         [32]      = 128 bytes
-    model/item_dense2/kernel       [32, 16]  = 2048 bytes
-    model/item_dense2/bias         [16]      = 64 bytes
-  顶部 MLP:
-    model/top_dense1/kernel        [32, 16]  = 2048 bytes
-    model/top_dense1/bias          [16]      = 64 bytes
-    model/top_dense2/kernel        [16, 8]   = 512 bytes
-    model/top_dense2/bias          [8]       = 32 bytes
-    model/top_out/kernel           [8, 1]    = 32 bytes
-    model/top_out/bias             [1]       = 4 bytes
+模型权重 (14 个) - 出现在 optimizer/_trainable_variables/ 下:
+  optimizer/_trainable_variables/0     [3, 32]   = 384 bytes   (user_dense1/kernel)
+  optimizer/_trainable_variables/1     [32]      = 128 bytes   (user_dense1/bias)
+  optimizer/_trainable_variables/2     [3, 32]   = 384 bytes   (item_dense1/kernel)
+  optimizer/_trainable_variables/3     [32]      = 128 bytes   (item_dense1/bias)
+  optimizer/_trainable_variables/4     [32, 16]  = 2048 bytes  (user_dense2/kernel)
+  optimizer/_trainable_variables/5     [16]      = 64 bytes    (user_dense2/bias)
+  optimizer/_trainable_variables/6     [32, 16]  = 2048 bytes  (item_dense2/kernel)
+  optimizer/_trainable_variables/7     [16]      = 64 bytes    (item_dense2/bias)
+  optimizer/_trainable_variables/8     [32, 16]  = 2048 bytes  (top_dense1/kernel)
+  optimizer/_trainable_variables/9     [16]      = 64 bytes    (top_dense1/bias)
+  optimizer/_trainable_variables/10    [16, 8]   = 512 bytes   (top_dense2/kernel)
+  optimizer/_trainable_variables/11    [8]       = 32 bytes    (top_dense2/bias)
+  optimizer/_trainable_variables/12    [8, 1]    = 32 bytes    (top_out/kernel)
+  optimizer/_trainable_variables/13    [1]       = 4 bytes     (top_out/bias)
   ─────────────────────────────────────
-  小计: 7920 bytes (7.7 KB)
+  小计: 8120 bytes (7.9 KB)
 
-Optimizer 状态 (28 个) - 推理不需要:
-  每个权重对应 2 个 Adam slot (一阶矩 m + 二阶矩 v)
-  optimizer/_variables/{2..29}  总计 15840 bytes (15.5 KB)
+Optimizer 状态 (30 个) - 推理不需要:
+  optimizer/_iterations          []     ← int64 标量
+  optimizer/_learning_rate       []     ← float32 标量
+  optimizer/_variables/{2..29}   ← 28 个 Adam m/v slot (每个权重 × 2)
+  总计 ~15840 bytes (15.5 KB)
 
-其他状态 (4 个):
-  optimizer/_iterations    []     ← int64 标量
-  optimizer/_learning_rate []     ← float32 标量
-  step                     []     ← int64 标量
-  save_counter             []     ← int64 标量
-
-对象图 (1 个):
+其他 (2 个):
   _CHECKPOINTABLE_OBJECT_GRAPH   ← TF2 对象拓扑 (protobuf string)
+  save_counter                   ← int64 标量
 
-总变量数: 47
-模型权重: 7.7 KB  ← 推理真正需要的
-其余开销: ~15.5 KB ← optimizer slot + 对象图 + 标量
+总变量数: 46
+模型权重: 7.9 KB  ← 推理真正需要的
+其余开销: ~16 KB   ← optimizer slot + 对象图 + 标量
 ```
 
 **核心洞察：** optimizer 的动量信息占了约 2/3 的存储。这就是为什么 checkpoint 不能直接上线推理——它携带了大量训练专用的膨胀数据。
@@ -316,9 +287,9 @@ Optimizer 状态 (28 个) - 推理不需要:
 
 ```python
 # 续训代码
-model = TwoTowerModel()                           # ← 对象树在这里创建
+model = build_model()                              # ← 对象树在这里创建
 opt = Adam()
-ckpt = tf.train.Checkpoint(model=model, optimizer=opt, step=step)
+ckpt = tf.train.Checkpoint(model=model, optimizer=opt)
 
 ckpt.restore("checkpoints/ckpt-4").expect_partial()   # ← 只灌值, 不建对象
 ```
@@ -355,8 +326,10 @@ Python 对象                        tracking path
 ckpt.model.user_dense1._kernel  →  "model/user_dense1/_kernel"
 ckpt.model.user_dense1.bias     →  "model/user_dense1/bias"
 ckpt.optimizer._iterations      →  "optimizer/_iterations"
-ckpt.step                       →  "step"
-...
+ckpt.optimizer._learning_rate   →  "optimizer/_learning_rate"
+ckpt.save_counter               →  "save_counter"
+ckpt.optimizer._trainable_variables/0  →  "optimizer/_trainable_variables/0"
+... (14 个权重逐号排列)
 ```
 
 **Step 3：tracking path → checkpoint_key (靠对象图)**
@@ -364,12 +337,13 @@ ckpt.step                       →  "step"
 TF 用同样的追踪路径去遍历 checkpoint 的对象图，找到每个变量节点上记录的 `checkpoint_key`：
 
 ```
-tracking path                          checkpoint_key (从对象图查到)
-─────────────────────────────          ─────────────────────────────────────
-model/user_dense1/_kernel              model/user_dense1/_kernel/.ATTRIBUTES/VARIABLE_VALUE
-model/user_dense1/bias                 model/user_dense1/bias/.ATTRIBUTES/VARIABLE_VALUE
-optimizer/_iterations                  optimizer/_iterations/.ATTRIBUTES/VARIABLE_VALUE
-step                                   step/.ATTRIBUTES/VARIABLE_VALUE
+tracking path                               checkpoint_key (从对象图查到)
+─────────────────────────────               ────────────────────────────────
+optimizer/_iterations                       optimizer/_iterations/.ATTRIBUTES/VARIABLE_VALUE
+optimizer/_learning_rate                    optimizer/_learning_rate/.ATTRIBUTES/VARIABLE_VALUE
+save_counter                                save_counter/.ATTRIBUTES/VARIABLE_VALUE
+optimizer/_trainable_variables/0            optimizer/_trainable_variables/0/.ATTRIBUTES/VARIABLE_VALUE
+...
 ```
 
 **Step 4：用 checkpoint_key 读到值，灌进 Python Variable**
@@ -393,64 +367,16 @@ TrackableObjectGraph
         └── slot_variables: [...]                          ← optimizer slot 注册
 ```
 
-本 demo 的 61 个节点形成以下树 (只保留关键路径)：
+Functional API 的 checkpoint 对象图：模型权重通过 optimizer 追踪（而非直接挂在 model 属性下），变量命名变为 `optimizer/_trainable_variables/N/...`。
 
-```
-n0  (root: tf.train.Checkpoint)
-├── "model"     → n1  (TwoTowerModel)
-│   ├── "user_dense1" → n5  → "_kernel" → n19 → ckpt_key="model/user_dense1/_kernel/..."
-│   │                      → "bias"    → n20 → ckpt_key="model/user_dense1/bias/..."
-│   ├── "user_dense2" → n6  → "_kernel" → n21
-│   │                      → "bias"    → n22
-│   ├── "item_dense1" → n7  → ...
-│   ├── "item_dense2" → n8  → ...
-│   ├── "top_dense1"  → n9  → ...
-│   ├── "top_dense2"  → n10 → ...
-│   └── "top_out"     → n11 → "_kernel" → n31
-│                           → "bias"    → n32
-├── "optimizer" → n2  (Adam)
-│   ├── "_iterations"  → n15 → ckpt_key="optimizer/_iterations/..."
-│   ├── "_learning_rate" → n16
-│   ├── "_trainable_variables" → n13 → [n19, n20, ..., n32] (14 个权重引用)
-│   ├── "_momentums" → n17 → [n33, n36, ...] (14 个 m slot)    ← 见下文 "slot 变量"
-│   ├── "_velocities" → n18 → [n34, n37, ...] (14 个 v slot)    ← 见下文 "slot 变量"
-│   └── "_variables" → n12 → [_iterations(n15), _lr(n16), m0(n33), v0(n34), m1(n36), ...]
-├── "step"         → n3  →  ckpt_key="step/..."
-└── "save_counter" → n4  →  ckpt_key="save_counter/..."
-```
-
-**什么是 slot 变量？** 优化器为每个被训练的权重创建的配套状态变量。Adam 为每个权重创建 2 个 slot：一阶矩 m (动量的指数移动平均) 和二阶矩 v (梯度平方的指数移动平均)。续训时如果丢失了这些 slot，Adam 就得从头开始累积动量——训练效果会退化。
-
-Adam 在对象图中用三组平行列表管理这个映射，按位置一一对应：
-
-```
-_trainable_variables[i] → 第 i 个权重
-_momentums[i]           → 第 i 个权重的 m slot
-_velocities[i]          → 第 i 个权重的 v slot
-```
-
-本 demo 的实际映射 (前3个权重)：
-
-```
-权重                                         m slot                                    v slot
-───────────────────────────                   ───────────────────────────              ───────────────────────────
-model/user_dense1/_kernel/...                 optimizer/_variables/2/...               optimizer/_variables/3/...
-model/user_dense1/bias/...                    optimizer/_variables/4/...               optimizer/_variables/5/...
-model/user_dense2/_kernel/...                 optimizer/_variables/6/...               optimizer/_variables/7/...
-... (共 14 个权重, 28 个 slot)
-```
-
-不同优化器的 slot 数量不同：SGD=0、SGD+Momentum=1、Adam=2、RMSProp=2。这就是为什么 checkpoint 比 saved_model 大——restore 需要 slot 状态才能正确续训，saved_model 只需要权重。
+restore 时的工作流程不变——Python 对象树仍由 `build_model()` 重新创建，对象图仍然是「tracking path → checkpoint_key」的查找表。
 
 ### 5.4 如果代码改了，会发生什么？
 
-这是理解对象图价值的关键。假设你在模型里加了一层 `top_dense3`：
+假设你在 Functional API 的 `build_model()` 里多加了一层：
 
 ```python
-class TwoTowerModel(tf.keras.Model):
-    def __init__(self):
-        ...
-        self.top_dense3 = tf.keras.layers.Dense(4)  # ← 新增
+x = tf.keras.layers.Dense(4, name="top_dense3")(x)  # ← 新增
 ```
 
 重新跑代码、restore 旧 checkpoint：
@@ -458,9 +384,10 @@ class TwoTowerModel(tf.keras.Model):
 ```
 Python 侧                          checkpoint 对象图
 ─────────────────────              ──────────────────
-model/top_dense1/_kernel     ←→    有
-model/top_dense1/bias        ←→    有
-model/top_dense3/_kernel     ←→    无  !!
+optimizer/.../trainable..0  ←→    有
+optimizer/.../trainable..1  ←→    有
+...
+optimizer/.../top_dense3    ←→    无  !!  (新层, 旧 checkpoint 没有)
 ```
 
 `restore().expect_partial()` 会报告：Python 侧多了一个变量，checkpoint 里没有对应值。这个变量保持初始随机值。其他变量正常恢复。**重要的是，TF 不会因为多了一个变量就报错或崩溃**——只要旧的那些 tracking path 匹配上了，就能恢复。
@@ -485,22 +412,18 @@ TF2:  图是隐式的, 动态的 (eager execution)
       └── checkpoint 只存变量值, 不需要存图结构
 ```
 
-**那图去哪了？在你的 Python 代码里。**
+**那图去哪了？在你的 `build_model()` 里。**
 
 ```python
-class TwoTowerModel(tf.keras.Model):
-    def call(self, user_feat, item_feat, training=False):
-        user_vec = self.user_dense1(user_feat)
-        user_vec = self.user_dense2(user_vec)
-        item_vec = self.item_dense1(item_feat)
-        item_vec = self.item_dense2(item_vec)
-        combined = tf.concat([user_vec, item_vec], axis=1)
-        x = self.top_dense1(combined)
-        ...
-        return tf.sigmoid(logit)
+def build_model():
+    user_input = tf.keras.Input(shape=(3,), name="user_feat")
+    item_input = tf.keras.Input(shape=(3,), name="item_feat")
+    u = tf.keras.layers.Dense(32, activation="relu")(user_input)
+    ...
+    return tf.keras.Model(inputs=[user_input, item_input], outputs=scores)
 ```
 
-这段代码**就是图**。每次调用 `model(x)`，TF 在 eager 模式下逐行执行这些操作。如果需要序列化图给 serving 用，那是 `saved_model` 的职责（导出时把 `call` 标上 `@tf.function`，trace 出 ConcreteFunction）。
+这段代码**就是图**。每次调用 `model([user_feat, item_feat])`，TF 在 eager 模式下逐层执行。如果需要序列化图给 serving 用，`model.export()` 会 trace 出 ConcreteFunction 写入 saved_model。
 
 ```
 checkpoint:   变量值 (供续训)

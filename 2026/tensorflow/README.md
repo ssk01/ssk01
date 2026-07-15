@@ -8,13 +8,15 @@
 python demo_two_tower.py
 ```
 
-## 模型结构
+## 模型结构 (Keras Functional API)
 
 ```
-user_feat(3) ──→ Dense(32, relu) ──→ user_emb(16) ──┐
-                                                      ├─ concat → Dense(16) → Dense(8) → Dense(1) → sigmoid → score
-item_feat(3) ──→ Dense(32, relu) ──→ item_emb(16) ──┘
+user_input(3) ──→ Dense(32) → user_emb(16) ──┐
+                                              ├─ concat → Dense(16) → Dense(8) → Dense(1) → sigmoid
+item_input(3) ──→ Dense(32) → item_emb(16) ──┘
 ```
+
+导出方式: `model.export(path)` — Functional API 建模时显式声明了多输入 (`Input(shape=..., name="user_feat")`)，Keras 自动生成正确的 serving_default 签名, 无需 ExportRoot, 无需手动建图.
 
 ## 四阶段流程
 
@@ -126,80 +128,49 @@ TensorFlow version: 2.21.0
 ============================================================
 阶段 2: 训练 (产出 checkpoint)
 ============================================================
-Epoch 1/5 | loss=0.6950 | step=32 | ckpt=checkpoints/ckpt-0
-Epoch 2/5 | loss=0.6894 | step=64 | ckpt=checkpoints/ckpt-1
-Epoch 3/5 | loss=0.6857 | step=96 | ckpt=checkpoints/ckpt-2
-Epoch 4/5 | loss=0.6837 | step=128 | ckpt=checkpoints/ckpt-3
-Epoch 5/5 | loss=0.6778 | step=160 | ckpt=checkpoints/ckpt-4
+Epoch 1/5 | loss=0.7026 | ckpt=checkpoints/ckpt-0
+Epoch 2/5 | loss=0.6902 | ckpt=checkpoints/ckpt-1
+Epoch 3/5 | loss=0.6826 | ckpt=checkpoints/ckpt-2
+Epoch 4/5 | loss=0.6746 | ckpt=checkpoints/ckpt-3
+Epoch 5/5 | loss=0.6628 | ckpt=checkpoints/ckpt-4
 
-训练完成. 最优 loss=0.6778 (step=160)
-checkpoint 目录内容: ['ckpt-4.data-00000-of-00001', 'checkpoint',
-  'ckpt-3.data-00000-of-00001', 'ckpt-2.data-00000-of-00001',
-  'ckpt-2.index', 'ckpt-4.index', 'ckpt-3.index']
-注意: checkpoint 包含 data-* (权重) + index (索引), 以及 optimizer 状态
-      checkpoint 不自包含图结构, 不适合直接用于推理!
+训练完成.
+checkpoint 目录: ['ckpt-4.data-00000-of-00001', 'checkpoint', ...]
+注意: checkpoint 不自包含图结构, 不适合直接用于推理!
 
 ============================================================
-阶段 3: 导出 saved_model
+阶段 3: 导出 saved_model (model.export)
 ============================================================
-saved_model 已导出到: saved_models/20260714
-
-saved_model 目录结构:
-20260714/
-  fingerprint.pb
-  saved_model.pb
-  variables/
-    variables.data-00000-of-00001
-    variables.index
-  assets/
+Saved artifact at saved_models/20260714
+Endpoint 'serve':
+  args_0: [TensorSpec(shape=(None,3), name='user_feat'),
+           TensorSpec(shape=(None,3), name='item_feat')]
+Output: TensorSpec(shape=(None,), dtype=float32)
 
 ============================================================
 阶段 4: 加载 & 验证 saved_model
 ============================================================
 
---- 4.1 Signature 信息 (模拟 saved_model_cli show) ---
-  signature: serving_default
-  输入 (用户可见):
-    item_feat  dtype=float32  shape=batch × 3
-    user_feat  dtype=float32  shape=batch × 3
-  输出:
-    Identity  dtype=float32  shape=batch × 1
-
-也可用命令行查看: saved_model_cli show --dir saved_models/20260714 --all
+--- 4.1 Signature ---
+  serving_default: user_feat(batch×3) + item_feat(batch×3) → float32(batch×1)
 
 --- 4.2 对拍验证: 训练图 vs 导出图 ---
-
-训练图产出: [0.4722  0.4215  0.4410  0.4508  0.4747]
-导出图产出: [0.4722  0.4215  0.4410  0.4508  0.4747]
-
-最大差异: 0.0000000000
-✓ 对拍通过: 训练图和导出图打分一致!
+训练图: [0.5006  0.4726  0.4889  0.4655  0.4637]
+导出图: [0.5006  0.4726  0.4889  0.4655  0.4637]
+最大差异: 0.0000000000  ✓ 对拍通过
 
 --- 4.3 输出合理性检查 ---
-score 范围: [0.4215, 0.4747]
-score 均值: 0.4520
-输出在 [0,1] 区间, 合理.
+score 范围: [0.4637, 0.5006] 均值: 0.4783  合理
 
 ============================================================
 总结: checkpoint vs saved_model
 ============================================================
-
- checkpoint 目录: checkpoints
-   ├── 内容: 模型权重 + optimizer 状态 (Adam m/v) + global_step
-   ├── 用途: 续训 / 容错恢复 (只对训练进程有意义)
-   └── 缺陷: 不自包含图结构, 需重新跑构图代码才能 restore
-
- saved_model 目录: saved_models/20260714
-   ├── 内容: saved_model.pb (正向图 + signature) + variables/ (权重)
-   ├── 用途: 推理交付 / 上线 serving / 迁移到自研平台
-   └── 优点: 自包含, 脱离训练代码可独立加载运行
-
- 一句话: checkpoint → 训练态; saved_model → 推理态
- 导出过程: 从 checkpoint restore 变量 → 构建正向推理图
-          → 绑定 signature → 写成 saved_model
+  checkpoint  → 训练态 (权重 + optimizer slot, 不自包含)
+  saved_model → 推理态 (正向图 + 权重 + signature, 自包含)
 ```
 
 ## 参考
 
-- [TFRecord格式详解.md](TFRecord格式详解.md) — 文件结构、CRC 校验、Example protobuf 定义、读写范式、与其他格式对比
-- [checkpoint详解.md](checkpoint详解.md) — checkpoint 三类文件的内部结构、变量清单、index 映射关系
+- [TFRecord格式详解.md](TFRecord格式详解.md) — 文件结构、CRC 校验、Example protobuf 定义、读写范式
+- [checkpoint详解.md](checkpoint详解.md) — checkpoint 三类文件的内部结构、变量清单、对象图
+- [saved_model详解.md](saved_model详解.md) — saved_model.pb 内部结构、SignatureDef、导出过程、与 checkpoint 对比
