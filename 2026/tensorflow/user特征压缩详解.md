@@ -28,9 +28,18 @@ after:   user [1,3]  → user_tower → user_emb [1,16]  ─┤
 
 对本 demo 的双塔，两者效果相同——都推到 concat。
 
-## 实现方式
+## 三种实现
 
-### Keras 原生（本 demo）
+三种实现最终产出同样的 saved_model 推理效果，区别在于**是否需要模型源码**和**通用性**。
+
+| | V1 Keras 原生 | V2 pb 改写 | V3 DeepRec-style |
+|---|---|---|---|
+| 文件 | `demo_compress.py` | `demo_compress_v2.py` | `demo_compress_v3.py` |
+| 需要模型源码 | 需要 | **不需要** | **不需要** |
+| 通用性 | 只能用于自己建的模型 | 需指定关键节点名 | **全自动**，只需标注 user/item 输入 |
+| 原理 | 共享 layer 引用，构建两条 forward | 解析 saved_model.pb → 找 concat 节点 → 插 broadcast 子图 | BFS 传播 user/item 归属 → 在 boundary 节点自动插 broadcast |
+
+### V1: Keras 原生 (demo_compress.py)
 
 两个模型共享同一组 `Dense` 层引用，区别在于 user 输入的 batch 维和交叉点的 broadcast：
 
@@ -45,44 +54,68 @@ top_mlp   = [Dense(128,'relu'), Dense(64,'relu'), Dense(32,'relu'), Dense(1)]
 #   交叉点: tf.broadcast_to(user_emb, [tf.shape(item)[0], 64])
 ```
 
-### broadcast 的具体实现
-
 Compressed 模型在 concat 之前插入一个 `Lambda` 层，负责把 user 输出从 `[1, 64]` 展开到 `[N, 64]`：
 
 ```python
 def broadcast_to_item_batch(inputs):
     user_emb, item_emb = inputs
     n = tf.shape(item_emb)[0]     # 运行时 N，取 item 的 batch 维
-    d = tf.shape(user_emb)[1]     # embedding 维度（64）
+    d = tf.shape(user_emb)[1]     # embedding 维度
     return tf.broadcast_to(user_emb, tf.stack([n, d]))
 
 u_bc = Lambda(broadcast_to_item_batch, name="broadcast_user")([u, i])
 ```
 
-关键点：
+**优点**：简单、可读性好。**缺点**：需要知道 user_tower/item_tower/top_mlp 的全部结构，感知一切。
 
-1. **用 `Lambda` 包装 TF ops**：Keras Functional API 中，`Input` 产出的 `KerasTensor` 不能直接传给 `tf.shape` / `tf.broadcast_to`，必须包在 Lambda 层里，等图执行时才调用
-2. **N 从 item 动态取**：`tf.shape(item_emb)[0]` 在运行时返回 item 的实际 batch size，无需额外占位符
-3. **BroadcastTo 是 copy-free**：TF 的 `BroadcastTo` 不实际复制数据，只改 metadata（stride=0 在 batch 维），不影响内存
-4. **embedding 维度不变**：user_emb 是 `[1, 64]`，broadcast 后是 `[N, 64]`，64 不变
+### V2: pb 改写 (demo_compress_v2.py)
 
-导出的 saved_model 中，这部分变成 `Shape → StridedSlice → Pack → BroadcastTo` 四个 op 的串联子图。
+不依赖模型源码，直接修改已导出的 `saved_model.pb`。步骤：
+
+1. 解析 `saved_model.pb` → 找到 `__inference___call___` 函数（FunctionDef，含 53 个节点）
+2. 通过节点名匹配找到 `user_emb_1/BiasAdd`（user 塔输出）、`item_emb_1/BiasAdd`（item 塔输出）、`concat_1/concat`（交叉点）
+3. 在 concat 前插入 broadcast 子图：
+
+```
+Shape(item_emb) → StridedSlice[0] → Pack([batch, emb_dim]) → BroadcastTo(user_emb, target_shape)
+```
+
+4. 修改 concat 的 input 引用，将 user_emb 换为 broadcast 输出
+5. 序列化回新的 pb
+
+**优点**：不需要模型源码。**缺点**：需要知道关键节点的命名约定（如 `user_emb`、`concat`）。
+
+### V3: DeepRec-style 自动边界检测 (demo_compress_v3.py)
+
+完全自动化——只需告诉它 user/item 输入名，自动完成剩余步骤：
+
+1. 解析 FunctionDef，构建 producer-consumer 图
+2. 从 `user_feat` 和 `item_feat` 出发，BFS 标记每个节点的归属：
+   - 纯 user 下游 → 标记 `user`
+   - 纯 item 下游 → 标记 `item`
+   - 同时接收 user 和 item 输入的节点 → 标记 `boundary`
+3. 对每个 boundary 节点，为它的 user 输入自动插 broadcast（从另一个 item 输入获取 N）
+4. 序列化回新的 pb
+
+```python
+analyzer = GraphAnalyzer(func_def)
+analyzer.propagate(user_inputs=["user_feat"], item_inputs=["item_feat"])
+boundaries = analyzer.find_boundary_inputs()
+# 对每个 boundary 的 user 输入插 broadcast
+```
+
+**优点**：不依赖源码、不依赖命名约定，适用于任意 saved_model。
 
 ## Benchmark
 
-模型：user tower (3→256→128→64), item tower (3→256→128→64), top_mlp (128→64→32→1)，约 99K 参数，user 塔占 35%。
+| N | Naive | V1 Keras | V2 pb改写 | V3 DeepRec |
+|---|-------|----------|-----------|------------|
+| 100 | 0.27ms | 0.27ms | 0.31ms | 0.34ms |
+| 500 | 0.68ms | 0.70ms | 0.70ms | 0.71ms |
+| 1000 | 1.11ms | 1.00ms | 1.06ms | 1.05ms |
+| 5000 | 3.38ms | 2.61ms | 2.58ms | 2.61ms |
 
-| N (候选数) | Naive (ms) | Compressed (ms) | Speedup |
-|-----------|-----------|----------------|---------|
-| 10 | 0.15 | 0.14 | 1.12x |
-| 50 | 0.23 | 0.19 | 1.17x |
-| 100 | 0.32 | 0.25 | 1.24x |
-| 500 | 0.70 | 0.52 | 1.36x |
-| 1000 | 1.11 | 0.80 | 1.38x |
-| 2000 | 1.55 | 1.34 | 1.15x |
-| 5000 | 3.93 | 2.89 | 1.36x |
-
-加速比峰值 1.38x，理论上限 = 1/(1-0.35) = 1.54x。N=2000+ 时 top_mlp 的 MatMul 开始主导，user 塔的相对占比下降，加速比有所回落但整体稳定。
+V1/V2/V3 三者最终效果一致（N=5000 时 1.3x 加速），V2/V3 在 N 较小时因 broadcast 子图（Shape+StridedSlice+Pack+BroadcastTo）有微小额外开销。
 
 ## 数值对拍
 
@@ -94,8 +127,6 @@ s_naive = naive([np.tile(user, (N,1)), items])
 s_comp  = compressed([user, items])
 assert np.allclose(s_naive, s_comp, atol=1e-6)  # ✓ max_diff < 2e-7
 ```
-
-验证通过（误差 < 2e-7），确认无损。
 
 ## 收益来源
 
@@ -115,19 +146,20 @@ assert np.allclose(s_naive, s_comp, atol=1e-6)  # ✓ max_diff < 2e-7
 ## 运行
 
 ```bash
+# V1: Keras 原生（需要从头训练）
 python demo_compress.py
-# 阶段 1: 样本构造
-# 阶段 2: 训练
-# 阶段 3: 数值对拍
-# 阶段 4: Benchmark
-# 阶段 5: 导出 Naive + Compressed 两个 saved_model
 
-python serving_benchmark.py
-# 加载两个 saved_model，压测对比
+# V2: pb 改写（已有 compress_naive saved_model 即可）
+python demo_compress_v2.py
+
+# V3: DeepRec-style 自动检测
+python demo_compress_v3.py
 ```
 
 ## 参考
 
-- [demo_compress.py](demo_compress.py) — 实现代码
+- [demo_compress.py](demo_compress.py) — V1 Keras 原生实现
+- [demo_compress_v2.py](demo_compress_v2.py) — V2 pb 改写实现
+- [demo_compress_v3.py](demo_compress_v3.py) — V3 DeepRec-style 实现
 - [demo_compress_plan.md](demo_compress_plan.md) — 方案设计
 - [demo_two_tower.py](demo_two_tower.py) — 原始双塔 demo
