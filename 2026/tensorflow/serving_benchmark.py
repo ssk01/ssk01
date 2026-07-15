@@ -2,11 +2,11 @@
 Serving Benchmark + Profile
 - 加载 saved_model (等价于 TF Serving 内部执行路径)
 - 模拟线上请求做压测
-- tf.profiler 采集执行 trace → TensorBoard 可视化
+- tf.profiler 采集执行 trace
+- 支持 Naive vs Compressed 双塔对比
 
 用法:
     python serving_benchmark.py
-    tensorboard --logdir tb_logs/serving_profile/
 """
 
 import os
@@ -17,12 +17,15 @@ import tensorflow as tf
 
 WORK_DIR = os.path.dirname(os.path.abspath(__file__))
 EXPORT_DIR = os.path.join(WORK_DIR, "saved_models", "20260714")
+NAIVE_DIR = os.path.join(WORK_DIR, "saved_models", "compress_naive")
+COMPRESSED_DIR = os.path.join(WORK_DIR, "saved_models", "compress_compressed")
 PROFILE_DIR = os.path.join(WORK_DIR, "tb_logs", "serving_profile")
 
 BATCH_SIZE = 128
 WARMUP_BATCHES = 15
 BENCH_BATCHES = 100
 PROFILE_BATCHES = 30
+COMPRESS_N_LIST = [10, 50, 100, 500, 1000, 2000]
 
 
 def load_serving_fn():
@@ -179,16 +182,33 @@ def main():
     capture_profile(serve_fn)
 
     print("\n" + "=" * 60)
-    print("Profile 分析 (XPlane)")
+    print("Naive vs Compressed 对比 (saved_model)")
     print("=" * 60)
-    analyze_profile()
 
-    print("\n" + "=" * 60)
-    print("其他查看方式:")
-    print("=" * 60)
-    print(f"  TensorBoard:    tensorboard --logdir {PROFILE_DIR}")
-    print(f"  saved_model_cli: saved_model_cli show --dir {EXPORT_DIR} --all")
-    print(f"  JSON export:    {export_json()}")
+    naive_fn = tf.saved_model.load(NAIVE_DIR).signatures["serving_default"]
+    comp_fn = tf.saved_model.load(COMPRESSED_DIR).signatures["serving_default"]
+
+    print(f"\n{'N':>6} | {'Naive(ms)':>10} {'P99':>8} | {'Comp(ms)':>10} {'P99':>8} | {'Speedup':>7}")
+    print("-" * 65)
+    for N in COMPRESS_N_LIST:
+        u1 = np.random.randn(1, 3).astype(np.float32)
+        items = np.random.randn(N, 3).astype(np.float32)
+        ut_n = tf.constant(np.tile(u1, (N, 1)))
+        ut_c = tf.constant(u1)
+        it = tf.constant(items)
+
+        for _ in range(50):
+            naive_fn(user_feat=ut_n, item_feat=it)
+            comp_fn(user_feat=ut_c, item_feat=it)
+
+        l_n, l_c = [], []
+        for _ in range(200):
+            t0 = time.perf_counter(); naive_fn(user_feat=ut_n, item_feat=it); l_n.append((time.perf_counter()-t0)*1000)
+            t0 = time.perf_counter(); comp_fn(user_feat=ut_c, item_feat=it); l_c.append((time.perf_counter()-t0)*1000)
+
+        l_n, l_c = np.array(l_n), np.array(l_c)
+        print(f'{N:>6} | {l_n.mean():>10.3f} {np.percentile(l_n,99):>8.3f} | {l_c.mean():>10.3f} {np.percentile(l_c,99):>8.3f} | {l_n.mean()/l_c.mean():>6.2f}x')
+    print()
 
 
 if __name__ == "__main__":
