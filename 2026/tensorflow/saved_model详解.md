@@ -64,35 +64,160 @@ signature_def['serving_default']:
 
 ### 1.2 GraphDef — 计算图
 
-正向推理计算图，包含所有 op 和 tensor 连接。本 demo：
+TF2 的 GraphDef 分两层：`graph_def.node` + `graph_def.library.function`。
+
+**外层 graph_def.node (137 个 op)** — 全是初始化/管理 boilerplate：
 
 ```
-137 个 op
-├── ReadVariableOp:   56 个
-├── VarHandleOp:      42 个
-├── VarIsInitializedOp: 14 个
-├── AssignVariableOp: 14 个
-├── Placeholder:       5 个
-├── StatefulPartitionedCall: 4 个
-└── NoOp, Const
-
-5 个 library functions:
-├── __inference___call___           → 38 ops (正向推理)
-├── __inference__traced_save       → 128 ops
-├── __inference__traced_restore    → 63 ops
-└── 2 个 signature_wrapper         → 各 3 ops
+ReadVariableOp:        56 个  从变量容器读 tensor (初始化阶段用)
+VarHandleOp:           42 个  创建变量句柄 (声明有哪些 weight)
+VarIsInitializedOp:    14 个  守卫: 变量未初始化时抛错
+AssignVariableOp:      14 个  restore 时给变量赋值
+Placeholder:            5 个  serving 输入占位符
+StatefulPartitionedCall: 4 个  调用 library function 的入口 (展开执行内部 op)
+NoOp, Const:           各 1 个
 ```
 
-**正向推理 op 序列 (38 个 op)：**
+这些 op 不是推理计算——它们负责变量创建、检查和赋值。真正的正向推理 op 在 library function 里。
+
+**内层 library.function (5 个)** — 实际的图函数：
 
 ```
-user_feat → MatMul → BiasAdd → Relu → MatMul → BiasAdd
-item_feat → MatMul → BiasAdd → Relu → MatMul → BiasAdd
-         → ConcatV2 → MatMul → BiasAdd → Relu → MatMul → BiasAdd → Relu
-         → MatMul → BiasAdd → Squeeze → Sigmoid → output
+__inference___call___           → 38 ops  ← 正向推理在这里
+__inference__traced_save       → 128 ops
+__inference__traced_restore    → 63 ops
+2 个 signature_wrapper         → 各 3 ops (一层薄封装, 内部调用 __inference___call___)
 ```
 
-这就是导出时「图裁剪」的结果——没有 `GradientTape`、反向传播、optimizer 更新，只有从输入到输出的正向路径。
+**为什么 137 ≠ 38？** 137 是外层所有初始化 op 的总和——它们是 graph 加载时执行的准备代码。加载完后，真正每次推理只跑 `StatefulPartitionedCall` → 展开执行 `__inference___call___` 里的 38 个 op。这 38 个才是你的模型计算。
+
+**op 之间的依赖关系** — 每个 NodeDef 有 `input` 字段，列出该 op 的上游 tensor（格式 `node_name:output_index`，`^` 前缀表示控制依赖）。通过 input 可追溯到输入直至输出，构成完整 DAG。
+
+以 `user_dense1/MatMul` 为例，它在 protobuf JSON 中的原始格式：
+
+```json
+{
+  "name": "two_tower_1/user_dense1_1/MatMul",
+  "op": "MatMul",
+  "input": [
+    "user_feat",
+    "two_tower_1/user_dense1_1/Cast/ReadVariableOp:value:0"
+  ],
+  "attr": {
+    "T": { "type": "DT_FLOAT" },
+    "_output_shapes": {
+      "list": { "shape": [{ "dim": [{ "size": "-1" }, { "size": "32" }] }] }
+    }
+  }
+}
+```
+
+| 字段 | 含义 |
+|------|------|
+| `name` | 节点唯一名称 |
+| `op` | 算子类型 (`MatMul`, `BiasAdd`, `Relu`…) |
+| `input` | 上游 tensor 名。`user_feat` 是函数输入参数，`ReadVariableOp:value:0` = 节点第 0 号输出 `value`。反查 upstream 节点即可追溯整条计算链 |
+| `attr.T` | 数据类型 (`DT_FLOAT`) |
+| `attr._output_shapes` | 输出 shape，`-1` 表示 batch 维度 (动态) |
+
+它的上游 `ReadVariableOp` 则引用一个 `DT_RESOURCE` 资源变量（14 个 kernel + bias，对应 14 个 `VarHandleOp`），格式：
+
+```json
+{
+  "name": "two_tower_1/user_dense1_1/Cast/ReadVariableOp",
+  "op": "ReadVariableOp",
+  "input": [
+    "two_tower_1_user_dense1_1_cast_readvariableop_resource"
+  ],
+  "attr": {
+    "dtype": { "type": "DT_FLOAT" },
+    "_output_shapes": {
+      "list": { "shape": [{ "dim": [{ "size": "3" }, { "size": "32" }] }] }
+    }
+  }
+}
+```
+
+这就是 `Dense(3→32)` 的 kernel weight，shape `[3, 32]`。
+
+完整 7 个 MatMul + 38 个 op 的原始 protobuf JSON 见 `saved_model_annotated.json`。
+
+#### MatMul 依赖一览
+
+每个 MatMul 恰好 2 个输入：上游激活 + 本层权重（ReadVariableOp）：
+
+```
+item_dense1/MatMul    ← item_feat                            ← ReadVariableOp(item_dense1/kernel)
+user_dense1/MatMul    ← user_feat                            ← ReadVariableOp(user_dense1/kernel)
+user_embedding/MatMul ← user_dense1/Relu:activations:0       ← ReadVariableOp(user_embedding/kernel)
+item_embedding/MatMul ← item_dense1/Relu:activations:0       ← ReadVariableOp(item_embedding/kernel)
+top_dense1/MatMul     ← concat/concat:output:0               ← ReadVariableOp(top_dense1/kernel)
+top_dense2/MatMul     ← top_dense1/Relu:activations:0        ← ReadVariableOp(top_dense2/kernel)
+top_out/MatMul        ← top_dense2/Relu:activations:0        ← ReadVariableOp(top_out/kernel)
+```
+
+#### 正向推理 38 个 op 完整展开
+
+```
+# === user tower (5 ops) ===
+ReadVariableOp  user_dense1/Cast/ReadVariableOp    ← kernel 变量资源
+MatMul          user_dense1/MatMul                  ← user_feat, kernel
+ReadVariableOp  user_dense1/BiasAdd/ReadVariableOp  ← bias 变量资源
+BiasAdd         user_dense1/BiasAdd                 ← MatMul:product:0, bias
+Relu            user_dense1/Relu                    ← BiasAdd:output:0
+
+# === item tower (5 ops) ===
+ReadVariableOp  item_dense1/Cast/ReadVariableOp     ← kernel
+MatMul          item_dense1/MatMul                   ← item_feat, kernel
+ReadVariableOp  item_dense1/BiasAdd/ReadVariableOp   ← bias
+BiasAdd         item_dense1/BiasAdd                  ← MatMul:product:0, bias
+Relu            item_dense1/Relu                     ← BiasAdd:output:0
+
+# === user embedding (3 ops，最后一层无激活) ===
+ReadVariableOp  user_embedding/Cast/ReadVariableOp   ← kernel
+MatMul          user_embedding/MatMul                 ← user_dense1/Relu:activations:0, kernel
+ReadVariableOp  user_embedding/BiasAdd/ReadVariableOp ← bias
+BiasAdd         user_embedding/BiasAdd                ← MatMul:product:0, bias   → user_emb (16维)
+
+# === item embedding (3 ops) ===
+ReadVariableOp  item_embedding/Cast/ReadVariableOp    ← kernel
+MatMul          item_embedding/MatMul                  ← item_dense1/Relu:activations:0, kernel
+ReadVariableOp  item_embedding/BiasAdd/ReadVariableOp  ← bias
+BiasAdd         item_embedding/BiasAdd                 ← MatMul:product:0, bias   → item_emb (16维)
+
+# === top MLP (14 ops: Concat → 16 → 8 → 1) ===
+Const           concat/concat/axis                    ← 无 (常量 axis=1)
+ConcatV2        concat/concat                         ← user_emb, item_emb, axis
+
+ReadVariableOp  top_dense1/Cast/ReadVariableOp        ← kernel
+MatMul          top_dense1/MatMul                      ← concat:output:0, kernel
+ReadVariableOp  top_dense1/BiasAdd/ReadVariableOp      ← bias
+BiasAdd         top_dense1/BiasAdd                     ← MatMul:product:0, bias
+Relu            top_dense1/Relu                        ← BiasAdd:output:0
+
+ReadVariableOp  top_dense2/Cast/ReadVariableOp        ← kernel
+MatMul          top_dense2/MatMul                      ← top_dense1/Relu:activations:0, kernel
+ReadVariableOp  top_dense2/BiasAdd/ReadVariableOp      ← bias
+BiasAdd         top_dense2/BiasAdd                     ← MatMul:product:0, bias
+Relu            top_dense2/Relu                        ← BiasAdd:output:0
+
+ReadVariableOp  top_out/Cast/ReadVariableOp            ← kernel
+MatMul          top_out/MatMul                          ← top_dense2/Relu:activations:0, kernel
+ReadVariableOp  top_out/Add/ReadVariableOp             ← bias
+AddV2           top_out/Add                            ← MatMul:product:0, bias   (Dense(1) 无激活, 用 AddV2)
+
+# === 输出 (3 ops) ===
+Squeeze         scores/Squeeze                         ← AddV2:z:0            (去掉维度1 → shape (batch,))
+Sigmoid         scores/Sigmoid                         ← Squeeze:output:0
+Identity        Identity                               ← Sigmoid:y:0, ^NoOp   (serving 最终输出)
+
+# === 控制依赖 ===
+NoOp            NoOp                                   ← ^14个ReadVariableOp  (确保 weight 全部初始化完毕)
+```
+
+> **`^` 控制依赖**: NoOp 的 14 个 `^ReadVariableOp` 不传数据，只保证执行顺序——所有变量读取在 NoOp 之前完成。Identity 通过 `^NoOp` 确保输出在所有操作后。
+
+完整 38 个 op 的 JSON 标注见 `saved_model_annotated.json`。
 
 ### 1.3 SavedObjectGraph — 对象图
 

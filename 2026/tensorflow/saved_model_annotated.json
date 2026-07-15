@@ -1,0 +1,1647 @@
+{
+  "how_to_read": {
+    "依赖关系": "每个 NodeDef 的 input 字段是字符串数组，格式为 node_name:output_index:src_output。例如 MatMul 的 input: [\"user_feat\", \"ReadVariableOp:value:0\"] 表示 MatMul 依赖 user_feat 节点的第0个输出 和 ReadVariableOp 的 value:0 输出。",
+    "^前缀": "input 以 ^ 开头表示控制依赖 (control dependency)，只保证执行顺序，不传数据。如 NoOp 的 input 里 ^14个ReadVariableOp。",
+    "外层与内层": "外层 graph_def.node (137 op) 的 StatefulPartitionedCall 通过 f.func.name 指定要调用的 library function。输入张量通过 Tin 列表传给 function 的 inputArg。"
+  },
+  "entry_point_StatefulPartitionedCall": {
+    "name": "StatefulPartitionedCall",
+    "op": "StatefulPartitionedCall",
+    "input": [
+      "serve_item_feat",
+      "serve_user_feat",
+      "item_dense1/kernel_1",
+      "item_dense1/bias_1",
+      "user_dense1/kernel_1",
+      "user_dense1/bias_1",
+      "user_embedding/kernel_1",
+      "user_embedding/bias_1",
+      "item_embedding/kernel_1",
+      "item_embedding/bias_1",
+      "top_dense1/kernel_1",
+      "top_dense1/bias_1",
+      "top_dense2/kernel_1",
+      "top_dense2/bias_1",
+      "top_out/kernel_1",
+      "top_out/bias_1"
+    ],
+    "attr": {
+      "Tout": {
+        "list": {
+          "type": [
+            "DT_FLOAT"
+          ]
+        }
+      },
+      "_read_only_resource_inputs": {
+        "list": {
+          "i": [
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15"
+          ]
+        }
+      },
+      "f": {
+        "func": {
+          "name": "__inference_signature_wrapper___call___99495"
+        }
+      },
+      "config_proto": {
+        "s": "CgcKA0NQVRABCgcKA0dQVRAAMgJKADgBggEAkgECSgA="
+      },
+      "_output_shapes": {
+        "list": {
+          "shape": [
+            {
+              "dim": [
+                {
+                  "size": "-1"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "_collective_manager_ids": {
+        "list": {}
+      },
+      "Tin": {
+        "list": {
+          "type": [
+            "DT_FLOAT",
+            "DT_FLOAT",
+            "DT_RESOURCE",
+            "DT_RESOURCE",
+            "DT_RESOURCE",
+            "DT_RESOURCE",
+            "DT_RESOURCE",
+            "DT_RESOURCE",
+            "DT_RESOURCE",
+            "DT_RESOURCE",
+            "DT_RESOURCE",
+            "DT_RESOURCE",
+            "DT_RESOURCE",
+            "DT_RESOURCE",
+            "DT_RESOURCE",
+            "DT_RESOURCE"
+          ]
+        }
+      }
+    }
+  },
+  "inference_function_signature": {
+    "name": "__inference___call___99460",
+    "input_arg": [
+      {
+        "name": "user_feat",
+        "type": "DT_FLOAT"
+      },
+      {
+        "name": "item_feat",
+        "type": "DT_FLOAT"
+      },
+      {
+        "name": "two_tower_1_item_dense1_1_cast_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "3"
+                },
+                {
+                  "size": "32"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "two_tower_1_item_dense1_1_biasadd_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "32"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "two_tower_1_user_dense1_1_cast_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "3"
+                },
+                {
+                  "size": "32"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "two_tower_1_user_dense1_1_biasadd_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "32"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "two_tower_1_user_embedding_1_cast_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "32"
+                },
+                {
+                  "size": "16"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "two_tower_1_user_embedding_1_biasadd_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "16"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "two_tower_1_item_embedding_1_cast_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "32"
+                },
+                {
+                  "size": "16"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "two_tower_1_item_embedding_1_biasadd_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "16"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "two_tower_1_top_dense1_1_cast_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "32"
+                },
+                {
+                  "size": "16"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "two_tower_1_top_dense1_1_biasadd_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "16"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "two_tower_1_top_dense2_1_cast_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "16"
+                },
+                {
+                  "size": "8"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "two_tower_1_top_dense2_1_biasadd_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "8"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "two_tower_1_top_out_1_cast_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "8"
+                },
+                {
+                  "size": "1"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "two_tower_1_top_out_1_add_readvariableop_resource",
+        "type": "DT_RESOURCE",
+        "handle_data": [
+          {
+            "dtype": "DT_FLOAT",
+            "shape": {
+              "dim": [
+                {
+                  "size": "1"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "output_arg": [
+      {
+        "name": "identity",
+        "type": "DT_FLOAT"
+      }
+    ],
+    "is_stateful": true,
+    "control_output": [
+      "two_tower_1/item_dense1_1/BiasAdd/ReadVariableOp",
+      "two_tower_1/item_dense1_1/Cast/ReadVariableOp",
+      "two_tower_1/item_embedding_1/BiasAdd/ReadVariableOp",
+      "two_tower_1/item_embedding_1/Cast/ReadVariableOp",
+      "two_tower_1/top_dense1_1/BiasAdd/ReadVariableOp",
+      "two_tower_1/top_dense1_1/Cast/ReadVariableOp",
+      "two_tower_1/top_dense2_1/BiasAdd/ReadVariableOp",
+      "two_tower_1/top_dense2_1/Cast/ReadVariableOp",
+      "two_tower_1/top_out_1/Add/ReadVariableOp",
+      "two_tower_1/top_out_1/Cast/ReadVariableOp",
+      "two_tower_1/user_dense1_1/BiasAdd/ReadVariableOp",
+      "two_tower_1/user_dense1_1/Cast/ReadVariableOp",
+      "two_tower_1/user_embedding_1/BiasAdd/ReadVariableOp",
+      "two_tower_1/user_embedding_1/Cast/ReadVariableOp"
+    ]
+  },
+  "7_MatMul_nodes_raw": [
+    {
+      "name": "two_tower_1/item_dense1_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "item_feat",
+        "two_tower_1/item_dense1_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/user_dense1_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "user_feat",
+        "two_tower_1/user_dense1_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/user_embedding_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "two_tower_1/user_dense1_1/Relu:activations:0",
+        "two_tower_1/user_embedding_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/item_embedding_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "two_tower_1/item_dense1_1/Relu:activations:0",
+        "two_tower_1/item_embedding_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_dense1_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "two_tower_1/concat_1/concat:output:0",
+        "two_tower_1/top_dense1_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_dense2_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "two_tower_1/top_dense1_1/Relu:activations:0",
+        "two_tower_1/top_dense2_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "8"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_out_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "two_tower_1/top_dense2_1/Relu:activations:0",
+        "two_tower_1/top_out_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "1"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "all_38_nodes_raw": [
+    {
+      "name": "two_tower_1/item_dense1_1/Cast/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_item_dense1_1_cast_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "3"
+                  },
+                  {
+                    "size": "32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/item_dense1_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "item_feat",
+        "two_tower_1/item_dense1_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/item_dense1_1/BiasAdd/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_item_dense1_1_biasadd_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/item_dense1_1/BiasAdd",
+      "op": "BiasAdd",
+      "input": [
+        "two_tower_1/item_dense1_1/MatMul:product:0",
+        "two_tower_1/item_dense1_1/BiasAdd/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/item_dense1_1/Relu",
+      "op": "Relu",
+      "input": [
+        "two_tower_1/item_dense1_1/BiasAdd:output:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/user_dense1_1/Cast/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_user_dense1_1_cast_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "3"
+                  },
+                  {
+                    "size": "32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/user_dense1_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "user_feat",
+        "two_tower_1/user_dense1_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/user_dense1_1/BiasAdd/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_user_dense1_1_biasadd_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/user_dense1_1/BiasAdd",
+      "op": "BiasAdd",
+      "input": [
+        "two_tower_1/user_dense1_1/MatMul:product:0",
+        "two_tower_1/user_dense1_1/BiasAdd/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/user_dense1_1/Relu",
+      "op": "Relu",
+      "input": [
+        "two_tower_1/user_dense1_1/BiasAdd:output:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/user_embedding_1/Cast/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_user_embedding_1_cast_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "32"
+                  },
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/user_embedding_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "two_tower_1/user_dense1_1/Relu:activations:0",
+        "two_tower_1/user_embedding_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/user_embedding_1/BiasAdd/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_user_embedding_1_biasadd_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/user_embedding_1/BiasAdd",
+      "op": "BiasAdd",
+      "input": [
+        "two_tower_1/user_embedding_1/MatMul:product:0",
+        "two_tower_1/user_embedding_1/BiasAdd/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/item_embedding_1/Cast/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_item_embedding_1_cast_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "32"
+                  },
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/item_embedding_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "two_tower_1/item_dense1_1/Relu:activations:0",
+        "two_tower_1/item_embedding_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/item_embedding_1/BiasAdd/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_item_embedding_1_biasadd_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/item_embedding_1/BiasAdd",
+      "op": "BiasAdd",
+      "input": [
+        "two_tower_1/item_embedding_1/MatMul:product:0",
+        "two_tower_1/item_embedding_1/BiasAdd/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/concat_1/concat/axis",
+      "op": "Const",
+      "attr": {
+        "value": {
+          "tensor": {
+            "dtype": "DT_INT32",
+            "tensor_shape": {},
+            "int_val": [
+              -1
+            ]
+          }
+        },
+        "dtype": {
+          "type": "DT_INT32"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/concat_1/concat",
+      "op": "ConcatV2",
+      "input": [
+        "two_tower_1/user_embedding_1/BiasAdd:output:0",
+        "two_tower_1/item_embedding_1/BiasAdd:output:0",
+        "two_tower_1/concat_1/concat/axis:output:0"
+      ],
+      "attr": {
+        "N": {
+          "i": "2"
+        },
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_dense1_1/Cast/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_top_dense1_1_cast_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "32"
+                  },
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_dense1_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "two_tower_1/concat_1/concat:output:0",
+        "two_tower_1/top_dense1_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_dense1_1/BiasAdd/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_top_dense1_1_biasadd_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_dense1_1/BiasAdd",
+      "op": "BiasAdd",
+      "input": [
+        "two_tower_1/top_dense1_1/MatMul:product:0",
+        "two_tower_1/top_dense1_1/BiasAdd/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_dense1_1/Relu",
+      "op": "Relu",
+      "input": [
+        "two_tower_1/top_dense1_1/BiasAdd:output:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "16"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_dense2_1/Cast/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_top_dense2_1_cast_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "16"
+                  },
+                  {
+                    "size": "8"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_dense2_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "two_tower_1/top_dense1_1/Relu:activations:0",
+        "two_tower_1/top_dense2_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "8"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_dense2_1/BiasAdd/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_top_dense2_1_biasadd_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "8"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_dense2_1/BiasAdd",
+      "op": "BiasAdd",
+      "input": [
+        "two_tower_1/top_dense2_1/MatMul:product:0",
+        "two_tower_1/top_dense2_1/BiasAdd/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "8"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_dense2_1/Relu",
+      "op": "Relu",
+      "input": [
+        "two_tower_1/top_dense2_1/BiasAdd:output:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "8"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_out_1/Cast/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_top_out_1_cast_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "8"
+                  },
+                  {
+                    "size": "1"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_out_1/MatMul",
+      "op": "MatMul",
+      "input": [
+        "two_tower_1/top_dense2_1/Relu:activations:0",
+        "two_tower_1/top_out_1/Cast/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "1"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_out_1/Add/ReadVariableOp",
+      "op": "ReadVariableOp",
+      "input": [
+        "two_tower_1_top_out_1_add_readvariableop_resource"
+      ],
+      "attr": {
+        "dtype": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "1"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/top_out_1/Add",
+      "op": "AddV2",
+      "input": [
+        "two_tower_1/top_out_1/MatMul:product:0",
+        "two_tower_1/top_out_1/Add/ReadVariableOp:value:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  },
+                  {
+                    "size": "1"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/scores_1/Squeeze",
+      "op": "Squeeze",
+      "input": [
+        "two_tower_1/top_out_1/Add:z:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "squeeze_dims": {
+          "list": {
+            "i": [
+              "1"
+            ]
+          }
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "two_tower_1/scores_1/Sigmoid",
+      "op": "Sigmoid",
+      "input": [
+        "two_tower_1/scores_1/Squeeze:output:0"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "Identity",
+      "op": "Identity",
+      "input": [
+        "two_tower_1/scores_1/Sigmoid:y:0",
+        "^NoOp"
+      ],
+      "attr": {
+        "T": {
+          "type": "DT_FLOAT"
+        },
+        "_output_shapes": {
+          "list": {
+            "shape": [
+              {
+                "dim": [
+                  {
+                    "size": "-1"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "NoOp",
+      "op": "NoOp",
+      "input": [
+        "^two_tower_1/item_dense1_1/BiasAdd/ReadVariableOp",
+        "^two_tower_1/item_dense1_1/Cast/ReadVariableOp",
+        "^two_tower_1/item_embedding_1/BiasAdd/ReadVariableOp",
+        "^two_tower_1/item_embedding_1/Cast/ReadVariableOp",
+        "^two_tower_1/top_dense1_1/BiasAdd/ReadVariableOp",
+        "^two_tower_1/top_dense1_1/Cast/ReadVariableOp",
+        "^two_tower_1/top_dense2_1/BiasAdd/ReadVariableOp",
+        "^two_tower_1/top_dense2_1/Cast/ReadVariableOp",
+        "^two_tower_1/top_out_1/Add/ReadVariableOp",
+        "^two_tower_1/top_out_1/Cast/ReadVariableOp",
+        "^two_tower_1/user_dense1_1/BiasAdd/ReadVariableOp",
+        "^two_tower_1/user_dense1_1/Cast/ReadVariableOp",
+        "^two_tower_1/user_embedding_1/BiasAdd/ReadVariableOp",
+        "^two_tower_1/user_embedding_1/Cast/ReadVariableOp"
+      ],
+      "attr": {
+        "_output_shapes": {
+          "list": {}
+        }
+      }
+    }
+  ]
+}

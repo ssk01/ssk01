@@ -1,0 +1,119 @@
+{
+  "tags": [
+    "serve"
+  ],
+  "signatures": {
+    "__saved_model_init_op": {
+      "outputs": {
+        "__saved_model_init_op": {
+          "name": "NoOp",
+          "tensorShape": {
+            "unknownRank": true
+          }
+        }
+      }
+    },
+    "serve": {
+      "inputs": {
+        "item_feat": {
+          "name": "serve_item_feat:0",
+          "dtype": "DT_FLOAT",
+          "tensorShape": {
+            "dim": [
+              {
+                "size": "-1"
+              },
+              {
+                "size": "3"
+              }
+            ]
+          }
+        },
+        "user_feat": {
+          "name": "serve_user_feat:0",
+          "dtype": "DT_FLOAT",
+          "tensorShape": {
+            "dim": [
+              {
+                "size": "-1"
+              },
+              {
+                "size": "3"
+              }
+            ]
+          }
+        }
+      },
+      "outputs": {
+        "output_0": {
+          "name": "StatefulPartitionedCall:0",
+          "dtype": "DT_FLOAT",
+          "tensorShape": {
+            "dim": [
+              {
+                "size": "-1"
+              }
+            ]
+          }
+        }
+      },
+      "methodName": "tensorflow/serving/predict"
+    },
+    "serving_default": {
+      "inputs": {
+        "item_feat": {
+          "name": "serving_default_item_feat:0",
+          "dtype": "DT_FLOAT",
+          "tensorShape": {
+            "dim": [
+              {
+                "size": "-1"
+              },
+              {
+                "size": "3"
+              }
+            ]
+          }
+        },
+        "user_feat": {
+          "name": "serving_default_user_feat:0",
+          "dtype": "DT_FLOAT",
+          "tensorShape": {
+            "dim": [
+              {
+                "size": "-1"
+              },
+              {
+                "size": "3"
+              }
+            ]
+          }
+        }
+      },
+      "outputs": {
+        "output_0": {
+          "name": "StatefulPartitionedCall_1:0",
+          "dtype": "DT_FLOAT",
+          "tensorShape": {
+            "dim": [
+              {
+                "size": "-1"
+              }
+            ]
+          }
+        }
+      },
+      "methodName": "tensorflow/serving/predict"
+    }
+  },
+  "graph_stats": {
+    "node_count": 137,
+    "library_functions": [
+      "__inference___call___99460",
+      "__inference__traced_save_99779",
+      "__inference_signature_wrapper___call___99529",
+      "__inference__traced_restore_99872",
+      "__inference_signature_wrapper___call___99495"
+    ]
+  }
+}
