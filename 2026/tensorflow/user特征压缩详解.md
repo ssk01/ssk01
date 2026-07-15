@@ -28,17 +28,16 @@ after:   user [1,3]  → user_tower → user_emb [1,16]  ─┤
 
 对本 demo 的双塔，两者效果相同——都推到 concat。
 
-## 三种实现
+## 四种实现
 
-| | V1 Keras 原生 | V2 pb 改写 | V3 自动边界检测 |
-|---|---|---|---|
-| 文件 | `demo_compress.py` | `demo_compress_v2.py` | `demo_compress_v3.py` |
-| 需要模型源码 | 需要 | **不需要** | **不需要** |
-| 通用性 | 只能用于自己建的模型 | 需指定关键节点名 | **全自动**，只需标注 user/item 输入 |
-| 时机 | 构建时定义两条 forward | 导出后改 pb | 导出后改 pb |
-| 原理 | 共享 layer 引用 | 解析 saved_model.pb → 找 concat → 插 broadcast | BFS 传播 user/item 归属 → 自动找 boundary → 插 broadcast |
+| | V1 Keras 原生 | V2 pb 改写 | V3 自动边界(pb) | V4 导出时压缩 |
+|---|---|---|---|---|
+| 文件 | `demo_compress.py` | `demo_compress_v2.py` | `demo_compress_v3.py` | `demo_compress_v4.py` |
+| 需要模型源码 | 需要 | 不需要 | 不需要 | 需要 |
+| 时机 | 构建时 | 导出后改 pb | 导出后改 pb | **导出前**（分析 → 构建 → 导出） |
+| 原理 | 共享 layer | 解析 pb → 找 concat → 插 broadcast | BFS 传播归属 → 自动找 boundary → 插 broadcast | BFS 分析 Keras 层拓扑 → 构建新模型 → 导出 |
 
-> **关于 DeepRec**：DeepRec 的 `enable_sample_awared_graph_compression` 是在**导出前**（`serving_input_receiver_fn` 阶段）对 live tensor 做图优化，压缩被烘进导出的 SavedModel。这里的 V2/V3 是对已导出的 pb 做后期改写，效果等价但时机不同。
+> V2/V3 是在导出的 pb 上做后期手术；V4 是在模型对象上分析并构建压缩版，更接近 DeepRec 在 `serving_input_receiver_fn` 中做图变换的思路。
 
 ### V1: Keras 原生 (demo_compress.py)
 
@@ -107,14 +106,26 @@ boundaries = analyzer.find_boundary_inputs()
 
 **优点**：不依赖源码、不依赖命名约定，适用于任意 saved_model。
 
-## Benchmark
+### V4: 导出时压缩 (demo_compress_v4.py)
 
-| N | Naive | V1 Keras | V2 pb改写 | V3 自动 |
-|---|-------|----------|-----------|---------|
-| 100 | 0.27ms | 0.27ms | 0.31ms | 0.34ms |
-| 500 | 0.68ms | 0.70ms | 0.70ms | 0.71ms |
-| 1000 | 1.11ms | 1.00ms | 1.06ms | 1.05ms |
-| 5000 | 3.38ms | 2.61ms | 2.58ms | 2.61ms |
+在导出 saved_model **之前**，分析 Keras 模型的 layer 拓扑图，自动定位 user/item 子图，构建带 broadcast 的压缩版模型后再导出。接近 DeepRec 在 `serving_input_receiver_fn` 里做图变换的思路。
+
+步骤：
+1. 训练 naive 模型
+2. 分析 layer 之间的 tensor 连接关系（通过 `layer.input.name` / `layer.output.name` 匹配）
+3. 从 user/item Input 层出发 BFS，标记每个 layer 的归属
+4. 找到 concat（boundary 层），收集 user 路径、item 路径、shared 路径上的 layer
+5. 构建新 Keras Model：复用原 layer 引用，在 concat 前插 broadcast
+6. 导出 compressed saved_model
+
+**优点**：在模型对象层面操作，不需要解析 pb；自动分析层拓扑。**缺点**：需要模型源码。| N | Naive | V1 | V2 | V3 | V4 |
+
+| N | Naive | V1 | V2 | V3 | V4 |
+|---|-------|----|----|----|----|
+| 100 | 0.27ms | 0.27ms | 0.31ms | 0.34ms | 0.21ms |
+| 500 | 0.68ms | 0.70ms | 0.70ms | 0.71ms | 0.49ms |
+| 1000 | 1.11ms | 1.00ms | 1.06ms | 1.05ms | 0.77ms |
+| 5000 | 3.38ms | 2.61ms | 2.58ms | 2.61ms | 3.14ms |
 
 V1/V2/V3 三者最终效果一致（N=5000 时 1.3x 加速），V2/V3 在 N 较小时因 broadcast 子图（Shape+StridedSlice+Pack+BroadcastTo）有微小额外开销。
 
@@ -153,14 +164,18 @@ python demo_compress.py
 # V2: pb 改写（已有 compress_naive saved_model 即可）
 python demo_compress_v2.py
 
-# V3: 自动边界检测
+# V3: 自动边界+pb 改写（已有 compress_naive 即可）
 python demo_compress_v3.py
+
+# V4: 导出时压缩（从头训练）
+python demo_compress_v4.py
 ```
 
 ## 参考
 
 - [demo_compress.py](demo_compress.py) — V1 Keras 原生实现
 - [demo_compress_v2.py](demo_compress_v2.py) — V2 pb 改写实现
-- [demo_compress_v3.py](demo_compress_v3.py) — V3 自动边界检测实现
+- [demo_compress_v3.py](demo_compress_v3.py) — V3 自动边界+pb 改写
+- [demo_compress_v4.py](demo_compress_v4.py) — V4 导出时压缩（Keras 层图分析）
 - [demo_compress_plan.md](demo_compress_plan.md) — 方案设计
 - [demo_two_tower.py](demo_two_tower.py) — 原始双塔 demo
