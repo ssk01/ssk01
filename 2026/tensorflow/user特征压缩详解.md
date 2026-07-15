@@ -45,7 +45,28 @@ top_mlp   = [Dense(128,'relu'), Dense(64,'relu'), Dense(32,'relu'), Dense(1)]
 #   交叉点: tf.broadcast_to(user_emb, [tf.shape(item)[0], 64])
 ```
 
-Compressed 版用 `tf.shape(item)[0]` 动态获取运行时 N。如果涉及 batch padding（对齐到 8/16 倍数等），需要额外输入来计算 `ceil(N/padding)*padding`，本 demo 无此需求。
+### broadcast 的具体实现
+
+Compressed 模型在 concat 之前插入一个 `Lambda` 层，负责把 user 输出从 `[1, 64]` 展开到 `[N, 64]`：
+
+```python
+def broadcast_to_item_batch(inputs):
+    user_emb, item_emb = inputs
+    n = tf.shape(item_emb)[0]     # 运行时 N，取 item 的 batch 维
+    d = tf.shape(user_emb)[1]     # embedding 维度（64）
+    return tf.broadcast_to(user_emb, tf.stack([n, d]))
+
+u_bc = Lambda(broadcast_to_item_batch, name="broadcast_user")([u, i])
+```
+
+关键点：
+
+1. **用 `Lambda` 包装 TF ops**：Keras Functional API 中，`Input` 产出的 `KerasTensor` 不能直接传给 `tf.shape` / `tf.broadcast_to`，必须包在 Lambda 层里，等图执行时才调用
+2. **N 从 item 动态取**：`tf.shape(item_emb)[0]` 在运行时返回 item 的实际 batch size，无需额外占位符
+3. **BroadcastTo 是 copy-free**：TF 的 `BroadcastTo` 不实际复制数据，只改 metadata（stride=0 在 batch 维），不影响内存
+4. **embedding 维度不变**：user_emb 是 `[1, 64]`，broadcast 后是 `[N, 64]`，64 不变
+
+导出的 saved_model 中，这部分变成 `Shape → StridedSlice → Pack → BroadcastTo` 四个 op 的串联子图。
 
 ## Benchmark
 
