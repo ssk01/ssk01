@@ -78,40 +78,52 @@ def main():
 
     g = tf.Graph()
     with g.as_default():
+        # 多个 user 输入
         user_ph = tf.compat.v1.placeholder(tf.float32, [None, 3], name="user_feat")
+        user_ctx = tf.compat.v1.placeholder(tf.float32, [None, 4], name="user_context")
+        # 多个 item 输入
         item_ph = tf.compat.v1.placeholder(tf.float32, [None, 3], name="item_feat")
+        item_price = tf.compat.v1.placeholder(tf.float32, [None, 2], name="item_price")
+
         item_size = tf.compat.v1.placeholder(tf.int32, shape=[], name="item_size")
 
-        # 构建压缩版图（tile 在图构建时就插进去）
+        # user 侧：两个特征各过 tower → concat
         with tf.compat.v1.variable_scope("user_tower"):
-            u = dense(user_ph, 256, activation=tf.nn.relu, name="user_d1")
-            u = dense(u, 128, activation=tf.nn.relu, name="user_d2")
-            u = dense(u, 64, name="user_emb")
+            u_feat = dense(user_ph, 128, activation=tf.nn.relu, name="ufeat_d1")
+            u_feat = dense(u_feat, 64, name="ufeat_emb")
+        with tf.compat.v1.variable_scope("user_context_tower"):
+            u_ctx = dense(user_ctx, 128, activation=tf.nn.relu, name="uctx_d1")
+            u_ctx = dense(u_ctx, 64, name="uctx_emb")
+        u = tf.concat([u_feat, u_ctx], axis=1, name="user_concat")  # [1, 128]
 
+        # item 侧：两个特征各过 tower → concat
         with tf.compat.v1.variable_scope("item_tower"):
-            i = dense(item_ph, 256, activation=tf.nn.relu, name="item_d1")
-            i = dense(i, 128, activation=tf.nn.relu, name="item_d2")
-            i = dense(i, 64, name="item_emb")
+            i_feat = dense(item_ph, 128, activation=tf.nn.relu, name="ifeat_d1")
+            i_feat = dense(i_feat, 64, name="ifeat_emb")
+        with tf.compat.v1.variable_scope("item_price_tower"):
+            i_price = dense(item_price, 128, activation=tf.nn.relu, name="iprice_d1")
+            i_price = dense(i_price, 64, name="iprice_emb")
+        i = tf.concat([i_feat, i_price], axis=1, name="item_concat")  # [N, 128]
 
-        # user 只来一份 [1, 64]，tile 到 [N, 64]
+        # user 只来一份 [1, 128]，tile 到 [N, 128]
         u_tiled = tf.tile(u, tf.stack([item_size, tf.constant(1, tf.int32)]), name="user_tiled")
 
-        x = tf.concat([u_tiled, i], axis=1, name="concat")
+        x = tf.concat([u_tiled, i], axis=1, name="cross_concat")
         x = dense(x, 128, activation=tf.nn.relu, name="top_d1")
         x = dense(x, 64, activation=tf.nn.relu, name="top_d2")
         x = dense(x, 32, activation=tf.nn.relu, name="top_d3")
         logit = dense(x, 1, name="top_out")
         scores = tf.sigmoid(tf.squeeze(logit, axis=1), name="scores")
 
-    # 验证 DeepRec 边界检测算法（在已构建的 graph 上跑）
+    # 验证 DeepRec 边界检测算法
     print("\nDeepRec find_boundery_tensors 算法验证:")
     ops = g.get_operations()
-    user_op = g.get_operation_by_name("user_feat")
-    item_op = g.get_operation_by_name("item_feat")
     item_sets, user_sets, boundaries = deeprec_find_boundary(
-        ops, ["user_feat"], ["item_feat"])
+        ops,
+        user_op_names=["user_feat", "user_context"],
+        item_op_names=["item_feat", "item_price"])
 
-    print(f"  item_sets: {len(item_sets)} ops (从 item_ph 可达的全部 op)")
+    print(f"  item_sets: {len(item_sets)} ops (从 {len(['item_feat','item_price'])} 个 item 输入可达)")
     print(f"  user_sets: {len(user_sets)} ops (纯 user 路径)")
     print(f"  boundaries: {len(boundaries)} tensors (user 输出被 item 子图消费)")
     for t in boundaries:
@@ -127,11 +139,15 @@ def main():
     with tf.compat.v1.Session(graph=g) as sess:
         sess.run(init)
         ti_u = tf.compat.v1.saved_model.utils.build_tensor_info(user_ph)
+        ti_uc = tf.compat.v1.saved_model.utils.build_tensor_info(user_ctx)
         ti_i = tf.compat.v1.saved_model.utils.build_tensor_info(item_ph)
+        ti_ip = tf.compat.v1.saved_model.utils.build_tensor_info(item_price)
         ti_s = tf.compat.v1.saved_model.utils.build_tensor_info(item_size)
         ti_o = tf.compat.v1.saved_model.utils.build_tensor_info(scores)
         sig = tf.compat.v1.saved_model.signature_def_utils.build_signature_def(
-            inputs={"user_feat": ti_u, "item_feat": ti_i, "item_size": ti_s},
+            inputs={"user_feat": ti_u, "user_context": ti_uc,
+                    "item_feat": ti_i, "item_price": ti_ip,
+                    "item_size": ti_s},
             outputs={"output_0": ti_o},
             method_name=tf.compat.v1.saved_model.signature_constants.PREDICT_METHOD_NAME)
         builder.add_meta_graph_and_variables(
@@ -142,29 +158,28 @@ def main():
 
     # Benchmark
     comp_fn = tf.saved_model.load(export_path).signatures["serving_default"]
-    naive_fn = tf.saved_model.load(
-        os.path.join(EXPORT_DIR, "compress_naive")).signatures["serving_default"]
-
-    print(f"\n{'N':>6} | {'Naive(ms)':>10} {'P99':>8} | {'V5(ms)':>10} {'P99':>8} | {'Speedup':>7}")
-    print("-" * 65)
+    print(f"\n{'N':>6} | {'V5(ms)':>10} {'P99':>8}")
+    print("-" * 35)
     for N in BENCH_N_LIST:
-        u1 = np.random.randn(1, 3).astype(np.float32)
-        items = np.random.randn(N, 3).astype(np.float32)
-        ut_n = tf.constant(np.tile(u1, (N, 1)))
-        ut_c = tf.constant(u1)
-        it = tf.constant(items)
-        sz = tf.constant(N, dtype=tf.int32)
+        u_feat = np.random.randn(1, 3).astype(np.float32)
+        u_ctx = np.random.randn(1, 4).astype(np.float32)
+        i_feat = np.random.randn(N, 3).astype(np.float32)
+        i_price = np.random.randn(N, 2).astype(np.float32)
 
         for _ in range(BENCH_WARMUP):
-            comp_fn(user_feat=ut_c, item_feat=it, item_size=sz)
-            naive_fn(user_feat=ut_n, item_feat=it)
+            comp_fn(user_feat=tf.constant(u_feat), user_context=tf.constant(u_ctx),
+                    item_feat=tf.constant(i_feat), item_price=tf.constant(i_price),
+                    item_size=tf.constant(N, dtype=tf.int32))
 
-        l_n, l_c = [], []
+        l_c = []
         for _ in range(BENCH_ITERS):
-            t0 = time.perf_counter(); naive_fn(user_feat=ut_n, item_feat=it); l_n.append((time.perf_counter()-t0)*1000)
-            t0 = time.perf_counter(); comp_fn(user_feat=ut_c, item_feat=it, item_size=sz); l_c.append((time.perf_counter()-t0)*1000)
-        l_n, l_c = np.array(l_n), np.array(l_c)
-        print(f'{N:>6} | {l_n.mean():>10.3f} {np.percentile(l_n,99):>8.3f} | {l_c.mean():>10.3f} {np.percentile(l_c,99):>8.3f} | {l_n.mean()/l_c.mean():>6.2f}x')
+            t0 = time.perf_counter()
+            comp_fn(user_feat=tf.constant(u_feat), user_context=tf.constant(u_ctx),
+                    item_feat=tf.constant(i_feat), item_price=tf.constant(i_price),
+                    item_size=tf.constant(N, dtype=tf.int32))
+            l_c.append((time.perf_counter()-t0)*1000)
+        l_c = np.array(l_c)
+        print(f'{N:>6} | {l_c.mean():>10.3f} {np.percentile(l_c,99):>8.3f}')
 
 
 if __name__ == "__main__":
