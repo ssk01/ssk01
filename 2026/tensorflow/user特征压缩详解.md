@@ -118,16 +118,45 @@ boundaries = analyzer.find_boundary_inputs()
 5. 构建新 Keras Model：复用原 layer 引用，在 concat 前插 broadcast
 6. 导出 compressed saved_model
 
-**优点**：在模型对象层面操作，不需要解析 pb；自动分析层拓扑。**缺点**：需要模型源码。| N | Naive | V1 | V2 | V3 | V4 |
+**优点**：在模型对象层面操作，不需要解析 pb；自动分析层拓扑。**缺点**：需要模型源码。
 
-| N | Naive | V1 | V2 | V3 | V4 |
-|---|-------|----|----|----|----|
-| 100 | 0.27ms | 0.27ms | 0.31ms | 0.34ms | 0.21ms |
-| 500 | 0.68ms | 0.70ms | 0.70ms | 0.71ms | 0.49ms |
-| 1000 | 1.11ms | 1.00ms | 1.06ms | 1.05ms | 0.77ms |
-| 5000 | 3.38ms | 2.61ms | 2.58ms | 2.61ms | 3.14ms |
+### V5: tf.Graph 层面压缩 (demo_compress_v5.py)
 
-V1/V2/V3 三者最终效果一致（N=5000 时 1.3x 加速），V2/V3 在 N 较小时因 broadcast 子图（Shape+StridedSlice+Pack+BroadcastTo）有微小额外开销。
+照着 DeepRec `find_boundery_tensors` 的算法，在 `tf.Graph` 上操作 Operations/Tensors：
+
+1. 在 `tf.Graph` 里构建双塔图，user tower 后用 `tf.tile` 展开到 N，再 concat
+2. 在构建好的 graph 上运行 DeepRec 的边界检测算法：
+   - 从 `item_ops` 出发 BFS，建立 `item_sets`（item 子图可达的全部 op）
+   - 从 `user_ops` 出发 BFS，对每个 user tensor 的 consumer：在 item_sets 里 → boundary
+3. 压缩逻辑（tile）已作为图的一部分，导出时自然包含
+
+和 DeepRec 一致：操作对象是 `tf.Graph` 的 Operation/Tensor（不是 protobuf），在**导出前**完成图变换。`user_tensors` 和 `item_tensors` 都是 list，支持多特征输入——本 demo 模型因结构简单只各有一个，但算法本身对 list 通用。
+
+| | V3 (pb改写) | V5 (Graph改写) |
+|---|---|---|---|
+| 操作对象 | FunctionDef.node_def (protobuf) | tf.Graph 的 Operation/Tensor |
+| 时机 | 导出后改 pb | 导出前，图构建期 |
+| 改法 | 在 FunctionDef 里插 BroadcastTo | 在 Graph 里插 tile/reshape |
+| 新输入 | 不需要 | 需要 `item_size` 占位符 |
+
+## 运行
+
+```bash
+# V1: Keras 原生（需要从头训练）
+python demo_compress.py
+
+# V2: pb 改写（已有 compress_naive saved_model 即可）
+python demo_compress_v2.py
+
+# V3: 自动边界+pb 改写（已有 compress_naive 即可）
+python demo_compress_v3.py
+
+# V4: 导出时压缩（从头训练）
+python demo_compress_v4.py
+
+# V5: tf.Graph 层面压缩（DeepRec 算法）
+python demo_compress_v5.py
+```
 
 ## 数值对拍
 
@@ -169,6 +198,9 @@ python demo_compress_v3.py
 
 # V4: 导出时压缩（从头训练）
 python demo_compress_v4.py
+
+# V5: tf.Graph 层面压缩（DeepRec 算法）
+python demo_compress_v5.py
 ```
 
 ## 参考
@@ -177,5 +209,6 @@ python demo_compress_v4.py
 - [demo_compress_v2.py](demo_compress_v2.py) — V2 pb 改写实现
 - [demo_compress_v3.py](demo_compress_v3.py) — V3 自动边界+pb 改写
 - [demo_compress_v4.py](demo_compress_v4.py) — V4 导出时压缩（Keras 层图分析）
+- [demo_compress_v5.py](demo_compress_v5.py) — V5 tf.Graph 层面压缩（DeepRec 算法）
 - [demo_compress_plan.md](demo_compress_plan.md) — 方案设计
 - [demo_two_tower.py](demo_two_tower.py) — 原始双塔 demo
