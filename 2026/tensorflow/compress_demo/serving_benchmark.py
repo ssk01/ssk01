@@ -16,7 +16,7 @@ import numpy as np
 import tensorflow as tf
 
 WORK_DIR = os.path.dirname(os.path.abspath(__file__))
-EXPORT_DIR = os.path.join(WORK_DIR, "saved_models", "20260714")
+EXPORT_DIR = os.path.join(WORK_DIR, "..", "two_tower_demo", "saved_models", "20260714")
 NAIVE_DIR = os.path.join(WORK_DIR, "saved_models", "compress_naive")
 COMPRESSED_DIR = os.path.join(WORK_DIR, "saved_models", "compress_compressed")
 PROFILE_DIR = os.path.join(WORK_DIR, "tb_logs", "serving_profile")
@@ -152,7 +152,7 @@ def export_json():
     pb_path = os.path.join(EXPORT_DIR, "saved_model.pb")
     with open(pb_path, "rb") as f:
         sm.ParseFromString(f.read())
-    json_path = os.path.join(WORK_DIR, "saved_model.json")
+    json_path = os.path.join(WORK_DIR, "..", "saved_model.json")
     mg = sm.meta_graphs[0]
     d = {
         "tags": list(mg.meta_info_def.tags),
