@@ -2,12 +2,8 @@
 
 ## two_tower_demo/
 
-双塔模型生产流程：样本构造 → 训练 → 导出 → 验证，完整走通上线链路。
-
-[详细说明](two_tower_demo/README.md)
+双塔模型 TF 文件格式详解：checkpoint 内部结构（V2 索引/数据/对象图）、saved_model.pb（MetaGraphDef/SignatureDef/FunctionDef）、TFRecord 格式。附可运行的训练→导出→验证 Demo。
 
 ## compress_demo/
 
 用户特征压缩 5 种实现对比：Keras 原生 / pb 改写 / DeepRec 风格 graph 改写 / BFS 自动边界检测 / serving benchmark。
-
-[详细说明](compress_demo/README.md)
