@@ -11,6 +11,7 @@ Learning by doing. Each sub-directory is an independent experiment.
 |---------|----------|-------------|
 | [tensorflow/two_tower_demo](2026/tensorflow/two_tower_demo/) | Python | TF 文件格式详解 — checkpoint V2 索引/数据/对象图结构、saved_model.pb（MetaGraphDef/SignatureDef/FunctionDef）、TFRecord 格式 |
 | [tensorflow/compress_demo](2026/tensorflow/compress_demo/) | Python | 双塔 User 特征压缩 — 5 种实现对比（Keras 原生/pb 改写/DeepRec 风格 graph 改写）、BFS 自动边界检测、serving benchmark + tf.profiler |
+| [tensorflow/xla_demo](2026/tensorflow/xla_demo/) | Python | XLA JIT 编译优化 — eager vs tf.function vs jit_compile 三种推理模式 benchmark、op 融合原理、batch 规模建议 |
 | [cpp](2026/cpp/) | C++ | C++ 手动实现 StringView/PinnableView (RocksDB 风格零拷贝) + Cleanable 清理链源码分析 |
 | [gemm](2026/gemm/) | C++ | GEMM 矩阵乘优化实验 — 从 naive 到 M4 Pro 上性能媲美 OpenMP，含 packA strides / tiling / vectorization / prefetch 多版本对比 |
 | [duckdb-learning](2026/duckdb-learning/) | C++ / Python | DuckDB 源码学习笔记 — 聚合性能对比 ClickHouse（查即算 vs 预聚合）、C++ 特性（optional_ptr/CRTP）、无锁队列设计、压缩算法（Dict/FSST）详解 |
