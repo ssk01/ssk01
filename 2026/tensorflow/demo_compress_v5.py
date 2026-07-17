@@ -1,14 +1,12 @@
 """
-V5: DeepRec 流程 — 构建图 → 找边界 → 在边界处插 tile → 导出
-===============================================================
-和 DeepRec 一样的算法流程:
-1. 在 tf.Graph 里构建 naive 图
-2. find_boundery_tensors: BFS item_ops → item_sets, BFS user_ops 找 boundary
-3. 在 boundary tensor 处插 expand_dims→tile→reshape（等价 DeepRec add_tile_op）
-4. 用 SavedModelBuilder 导出
-
-选择: TF2 v1 compat 下 op._update_input 在 complex graph 上有边缘情况，
-这里采用「构建时就留 hook 点，检测到 boundary 后在 hook 处注入 tile」的方式。
+V5: DeepRec 完整流程（照着源码抄）
+====================================
+1. 构建 user_tower + item_tower (naive，无交叉)
+2. find_boundery_tensors: 从 item_ops BFS → item_sets (consumer ops)，
+   从 user_ops BFS → 找 consumer ∈ item_sets 的 boundary tensor
+3. 对每个 boundary tensor，插 expand_dims→tile→reshape
+4. 用 tiled tensor 继续构建 concat → top_mlp → scores
+5. 导出 saved_model
 
 运行:
     python demo_compress_v5.py
@@ -35,46 +33,55 @@ def dense(x, units, activation=None, name=""):
     return y
 
 
-def deeprec_find_boundary(user_ops, item_ops):
-    """DeepRec find_boundery_tensors: BFS 直接遍历 Operation 对象，不靠名字匹配"""
-
-    # item_sets: 从 item_ops 出发, BFS 可达的全部 op
+def find_boundery_tensors(user_ops, item_ops):
+    """照着 DeepRec 源码抄的 find_boundery_tensors"""
+    # Step 1: BFS from item_ops → item_sets = set of all reachable consumer ops
+    queue_item = deque(item_ops)
     item_sets = set()
-    for start_op in item_ops:
-        q = deque([start_op])
-        while q:
-            o = q.popleft()
-            if o in item_sets:
-                continue
-            item_sets.add(o)
-            for t in o.outputs:
-                for c in t.consumers():
-                    q.append(c)
+    processed_item = set()
+    while queue_item:
+        op = queue_item.popleft()
+        if op in processed_item:
+            continue
+        processed_item.add(op)
+        for t in op.outputs:
+            consumers = list(t.consumers())
+            item_sets = item_sets | set(consumers)
+            queue_item.extend(consumers)
 
-    # boundary: user 张量，其 consumer 在 item_sets 里
-    boundaries = set()
-    for start_op in user_ops:
-        q = deque([start_op]); visited = set()
-        while q:
-            o = q.popleft()
-            if o in visited:
-                continue
-            visited.add(o)
-            for t in o.outputs:
-                for c in t.consumers():
-                    if c in visited:
-                        continue
-                    if c in item_sets:
-                        boundaries.add(t)
-                    else:
-                        q.append(c)
+    # Step 2: BFS from user_ops → boundary = user tensors whose consumer in item_sets
+    queue_user = deque(user_ops)
+    user_sets = set()
+    boundery_tensor_sets = set()
+    while queue_user:
+        op = queue_user.popleft()
+        for t in op.outputs:
+            for op2 in t.consumers():
+                if op2 in user_sets:
+                    continue
+                if op2 in item_sets:
+                    boundery_tensor_sets.add(t)
+                else:
+                    user_sets.add(op2)
+                    queue_user.append(op2)
+    return user_sets, item_sets, boundery_tensor_sets
 
-    return item_sets, boundaries
+
+def apply_tile(tensor, item_n):
+    """对 user boundary tensor 做 expand_dims→tile→reshape"""
+    shape = tensor.get_shape().as_list()
+    u_exp = tf.expand_dims(tensor, 1)
+    tile_multiples = [tf.constant(1, tf.int32)]
+    tile_multiples.append(item_n)
+    for _ in range(len(shape) - 1):
+        tile_multiples.append(tf.constant(1, tf.int32))
+    u_tiled = tf.tile(u_exp, tf.stack(tile_multiples))
+    return tf.reshape(u_tiled, tf.concat([[-1], tf.shape(tensor)[1:]], axis=0))
 
 
 def main():
     print("=" * 60)
-    print("V5: DeepRec — 找边界 → 插 tile → 导出")
+    print("V5: DeepRec — find_boundery_tensors → apply_tile → 继续构图")
     print("=" * 60)
 
     g = tf.Graph()
@@ -85,40 +92,58 @@ def main():
         i2 = tf.compat.v1.placeholder(tf.float32, [None, 2], name="item_price")
         item_n = tf.compat.v1.placeholder(tf.int32, shape=[], name="item_size")
 
-        # User towers
+        # ==== Phase 1: 构建完整 naive 图（为了 boundary detection 有连接） ====
         with tf.compat.v1.variable_scope("ut"):
             uf = dense(u1, 128, activation=tf.nn.relu, name="f"); uf = dense(uf, 64, name="e")
             uc = dense(u2, 128, activation=tf.nn.relu, name="c"); uc = dense(uc, 64, name="ce")
             u = tf.concat([uf, uc], axis=1, name="cat")
 
-        # Item towers
         with tf.compat.v1.variable_scope("it"):
             inf = dense(i1, 128, activation=tf.nn.relu, name="f"); inf = dense(inf, 64, name="e")
             ipr = dense(i2, 128, activation=tf.nn.relu, name="c"); ipr = dense(ipr, 64, name="ce")
             ic = tf.concat([inf, ipr], axis=1, name="cat")
 
-        # ---- 压缩 hook 点 ----
-        u_tiled = tf.tile(u, tf.stack([item_n, tf.constant(1, tf.int32)]), name="user_tiled")
-        # ---------------------
+        # naive cross (用于 boundary detection 建立 user↔item 连接)
+        x_naive = tf.concat([u, ic], axis=1, name="cross_naive")
+        _ = dense(x_naive, 1, name="dead")  # 死路径，只为了让 graph 有连接
+
+        # ==== Phase 2: DeepRec find_boundery_tensors ====
+        print("\nPhase 2: find_boundery_tensors")
+        user_sets, item_sets, boundaries = find_boundery_tensors(
+            [u1.op, u2.op], [i1.op, i2.op])
+        print(f"  item_sets: {len(item_sets)} consumer ops")
+        print(f"  user_sets: {len(user_sets)} user ops")
+        print(f"  boundaries_found: {len(boundaries)} tensors")
+        for t in boundaries:
+            print(f"    {t.name} → {[c.name for c in t.consumers()]}")
+
+        # ==== Phase 3: 基于 boundary 结果，tile + 构建真实的压缩图 ====
+        print("\nPhase 3: tile at boundaries → compressed graph")
+        tiled_map = {}
+        for t in boundaries:
+            tiled_map[t] = apply_tile(t, item_n)
+            print(f"  {t.name} → expand_dims→tile→reshape → {tiled_map[t].name}")
+
+        u_tiled = tiled_map.get(u, u)
 
         x = tf.concat([u_tiled, ic], axis=1, name="cross")
         x = dense(x, 128, activation=tf.nn.relu, name="t1")
         x = dense(x, 64, activation=tf.nn.relu, name="t2")
         x = dense(x, 32, activation=tf.nn.relu, name="t3")
         x = dense(x, 1, name="out")
-        scores = tf.sigmoid(tf.squeeze(x, axis=1), name="scores")
+        logits = tf.squeeze(x, axis=1, name="logits")
+        scores = tf.sigmoid(logits, name="scores")
 
-        # DeepRec 边界检测——直接用 Operation 对象遍历
-        item_sets, boundaries = deeprec_find_boundary(
-            [u1.op, u2.op], [i1.op, i2.op])
-        print(f"\n  item_sets: {len(item_sets)} ops")
-        print(f"  boundaries found: {len(boundaries)}")
-        for t in boundaries:
-            print(f"    {t.name} → {[c.name for c in t.consumers()]}")
+        # ==== Phase 4: loss + optimizer（训练也在压缩图上跑） ====
+        labels = tf.compat.v1.placeholder(tf.float32, [None], name="labels")
+        loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+            labels=labels, logits=logits), name="loss")
+        optimizer = tf.compat.v1.train.AdamOptimizer(0.001)
+        train_op = optimizer.minimize(loss)
 
         init = tf.compat.v1.global_variables_initializer()
 
-    # 导出 + 验证
+    # Export
     out = os.path.join(EXPORT_DIR, "compress_v5")
     if os.path.exists(out): shutil.rmtree(out)
     b = tf.compat.v1.saved_model.builder.SavedModelBuilder(out)
@@ -131,10 +156,26 @@ def main():
             method_name=tf.compat.v1.saved_model.signature_constants.PREDICT_METHOD_NAME)
         b.add_meta_graph_and_variables(s, ["serve"], {"serving_default": sig})
     b.save()
-    print(f"\n  导出: {out}")
+    print(f"\n导出: {out}")
 
-    # quick verify
-    # verify via v1 session
+    # Train (on compressed graph)
+    print("\n训练 (在压缩图上)...")
+    with tf.compat.v1.Session(graph=g) as s:
+        s.run(init)
+        for epoch in range(3):
+            total_loss = 0
+            for _ in range(50):
+                fd = {u1: np.random.randn(32, 3).astype(np.float32),
+                      u2: np.random.randn(32, 4).astype(np.float32),
+                      i1: np.random.randn(32, 3).astype(np.float32),
+                      i2: np.random.randn(32, 2).astype(np.float32),
+                      item_n: 1,
+                      labels: (np.random.randn(32) > 0).astype(np.float32)}
+                _, l = s.run([train_op, loss], fd)
+                total_loss += l
+            print(f"  epoch {epoch+1}: loss={total_loss/50:.4f}")
+
+    # verify + benchmark
     with tf.compat.v1.Session(graph=g) as s:
         s.run(init)
         r = s.run(scores, {u1: np.random.randn(1,3).astype(np.float32),
@@ -142,9 +183,9 @@ def main():
                            i1: np.random.randn(5,3).astype(np.float32),
                            i2: np.random.randn(5,2).astype(np.float32),
                            item_n: 5})
-        print(f"  verify: shape={r.shape} ✓")
+        print(f"verify: shape={r.shape} ✓")
 
-    # benchmark via v1 session
+    # Benchmark
     print(f"\n{'N':>6} | {'V5(ms)':>10} {'P99':>8}")
     print("-" * 30)
     with tf.compat.v1.Session(graph=g) as s:
