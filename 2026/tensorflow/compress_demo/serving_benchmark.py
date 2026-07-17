@@ -152,7 +152,7 @@ def export_json():
     pb_path = os.path.join(EXPORT_DIR, "saved_model.pb")
     with open(pb_path, "rb") as f:
         sm.ParseFromString(f.read())
-    json_path = os.path.join(WORK_DIR, "..", "saved_model.json")
+    json_path = os.path.join(WORK_DIR, "..", "two_tower_demo", "saved_model.json")
     mg = sm.meta_graphs[0]
     d = {
         "tags": list(mg.meta_info_def.tags),
