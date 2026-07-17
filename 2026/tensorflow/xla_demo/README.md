@@ -1,6 +1,6 @@
 # XLA 优化 Demo
 
-## 是什么
+> 测试环境：MacBook Pro M4 Pro (CPU)。XLA 在 CPU 上的收益来自 op 融合（减少中间 tensor 分配/拷贝），在 GPU/TPU 上还有 kernel launch overhead 节省，加速比会更显著。
 
 XLA (Accelerated Linear Algebra) 是 TensorFlow 的 JIT 编译器。`@tf.function(jit_compile=True)` 会把计算图编译成优化后的机器码，核心收益来自 **op 融合**：
 
