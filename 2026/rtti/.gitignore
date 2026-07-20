@@ -1,0 +1,8 @@
+build/
+out/
+*.o
+*.a
+*.class
+rtti_minimal
+cpp_rtti_demo
+jvm_rtti_demo
