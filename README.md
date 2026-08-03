@@ -9,6 +9,7 @@ Learning by doing. Each sub-directory is an independent experiment.
 
 | Project | Language | Description |
 |---------|----------|-------------|
+| [tensorflow/dl-from-zero](2026/tensorflow/dl-from-zero/) | C++ | 从 0 到 1 手写类 TF 深度学习框架 — Graph/Node 计算图、op 前向+反向自动微分、TopoSort/Session;概念优先,复刻 TF 核心逻辑而非细节 |
 | [rtti](2026/rtti/) | C++ / Java | RTTI 运行时类型信息详解 — Preorder 区间编号（最小每对象 4B + O(1) instanceof）、JVM 压缩 klass ptr 模拟、C++ vptr/vtable/dynamic_cast 模拟、Euler Tour 三题 |
 | [tensorflow/two_tower_demo](2026/tensorflow/two_tower_demo/) | Python | TF 文件格式详解 — checkpoint V2 索引/数据/对象图结构、saved_model.pb（MetaGraphDef/SignatureDef/FunctionDef）、TFRecord 格式 |
 | [tensorflow/compress_demo](2026/tensorflow/compress_demo/) | Python | 双塔 User 特征压缩 — 5 种实现对比（Keras 原生/pb 改写/DeepRec 风格 graph 改写）、BFS 自动边界检测、serving benchmark + tf.profiler |

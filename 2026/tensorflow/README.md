@@ -1,5 +1,9 @@
 # TensorFlow 学习项目
 
+## dl-from-zero/
+
+从 0 到 1 手写类 TF 深度学习框架（C++）— Graph/Node 计算图、op 前向+反向自动微分、TopoSort/Session。概念优先,复刻 TF 核心逻辑而非细节。
+
 ## two_tower_demo/
 
 双塔模型 TF 文件格式详解：checkpoint 内部结构（V2 索引/数据/对象图）、saved_model.pb（MetaGraphDef/SignatureDef/FunctionDef）、TFRecord 格式。附可运行的训练→导出→验证 Demo。
