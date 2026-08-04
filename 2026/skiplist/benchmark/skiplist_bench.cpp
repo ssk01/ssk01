@@ -17,6 +17,7 @@
 // Usage: ./bench [num_elements] [num_range_queries]
 
 #include "redis_zskiplist.h"
+#include "../skiplist.cpp"
 
 #include <algorithm>
 #include <chrono>
@@ -314,6 +315,111 @@ static void bench_umap(const Data &d, const vector<size_t> &order) {
     }
 }
 
+static void bench_handwritten(const vector<size_t> &order) {
+    size_t n = order.size();
+    int max_level = 32;
+
+    double t = now_sec();
+    {
+        Skiplist sl(max_level);
+        for (size_t k : order)
+            sl.insert((int)k, (int)k);
+        printf("  handwritten insert %5zu : %8.3f ms\n", n, (now_sec() - t) * 1e3);
+    }
+
+    t = now_sec();
+    {
+        Skiplist sl(max_level);
+        for (size_t k = 0; k < n; k++)
+            sl.insert((int)k, (int)k);
+        size_t hits = 0;
+        for (size_t k : order)
+            hits += sl.get((int)k) != -1;
+        printf("  handwritten find   %5zu : %8.3f ms  (hits=%zu)\n", n, (now_sec() - t) * 1e3, hits);
+    }
+
+    t = now_sec();
+    {
+        Skiplist sl(max_level);
+        for (size_t k = 0; k < n; k++)
+            sl.insert((int)k, (int)k);
+        for (size_t k : order)
+            sl.insert((int)k, (int)k + 1);
+        printf("  handwritten update %5zu : %8.3f ms\n", n, (now_sec() - t) * 1e3);
+    }
+}
+
+static void bench_map_int(const vector<size_t> &order) {
+    size_t n = order.size();
+
+    double t = now_sec();
+    {
+        std::map<int, int> m;
+        for (size_t k : order)
+            m.emplace((int)k, (int)k);
+        printf("  map<int,int>      insert %5zu : %8.3f ms\n", n, (now_sec() - t) * 1e3);
+    }
+
+    t = now_sec();
+    {
+        std::map<int, int> m;
+        for (size_t k = 0; k < n; k++)
+            m.emplace((int)k, (int)k);
+        size_t hits = 0;
+        for (size_t k : order)
+            hits += m.find((int)k) != m.end();
+        printf("  map<int,int>      find   %5zu : %8.3f ms  (hits=%zu)\n", n, (now_sec() - t) * 1e3, hits);
+    }
+
+    t = now_sec();
+    {
+        std::map<int, int> m;
+        for (size_t k = 0; k < n; k++)
+            m.emplace((int)k, (int)k);
+        for (size_t k : order) {
+            m.erase((int)k);
+            m.emplace((int)k, (int)k + 1);
+        }
+        printf("  map<int,int>      update %5zu : %8.3f ms\n", n, (now_sec() - t) * 1e3);
+    }
+}
+
+static void bench_umap_int(const vector<size_t> &order) {
+    size_t n = order.size();
+
+    double t = now_sec();
+    {
+        std::unordered_map<int, int> m;
+        m.reserve(n * 2);
+        for (size_t k : order)
+            m.emplace((int)k, (int)k);
+        printf("  unordered_map<int,int> insert %5zu : %8.3f ms\n", n, (now_sec() - t) * 1e3);
+    }
+
+    t = now_sec();
+    {
+        std::unordered_map<int, int> m;
+        m.reserve(n * 2);
+        for (size_t k = 0; k < n; k++)
+            m.emplace((int)k, (int)k);
+        size_t hits = 0;
+        for (size_t k : order)
+            hits += m.find((int)k) != m.end();
+        printf("  unordered_map<int,int> find   %5zu : %8.3f ms  (hits=%zu)\n", n, (now_sec() - t) * 1e3, hits);
+    }
+
+    t = now_sec();
+    {
+        std::unordered_map<int, int> m;
+        m.reserve(n * 2);
+        for (size_t k = 0; k < n; k++)
+            m.emplace((int)k, (int)k);
+        for (size_t k : order)
+            m[(int)k] = (int)k + 1;
+        printf("  unordered_map<int,int> update %5zu : %8.3f ms\n", n, (now_sec() - t) * 1e3);
+    }
+}
+
 int main(int argc, char **argv) {
     if (argc > 1) g_n = (size_t)strtoull(argv[1], NULL, 10);
     if (argc > 2) g_range_queries = (size_t)strtoull(argv[2], NULL, 10);
@@ -334,5 +440,11 @@ int main(int argc, char **argv) {
     bench_map(d, order);
     printf("\n--- std::unordered_map ---\n");
     bench_umap(d, order);
+    printf("\n--- skiplist (handwritten, int keys) ---\n");
+    bench_handwritten(order);
+    printf("\n--- std::map (int keys) ---\n");
+    bench_map_int(order);
+    printf("\n--- std::unordered_map (int keys) ---\n");
+    bench_umap_int(order);
     return 0;
 }
