@@ -1,6 +1,7 @@
 #include <climits>
 #include <cstddef>
 #include <utility>
+#include <vector>
 
 using namespace std;
 
@@ -40,6 +41,9 @@ public:
     Skiplist(int max_level) : max_level_(max_level) {
         head_ = new Element(max_level_, INT_MIN, 0);
         tail_ = new Element(max_level_, INT_MAX, 0);
+        for (int i = 0; i < max_level_; i++) {
+            head_->set_next(tail_, i);
+        }
     }
     int get(int key) {
         auto lhs = head_;
@@ -84,12 +88,13 @@ public:
         while(rand() % 2 == 0) {
             level+=1;
             if (level == max_level_) {
-                return level;
+                break;
             }
         }
+        return level;
     }
 private:
     int max_level_; // ex. 10,  [0, 10)
     Element* head_;
     Element* tail_;
-}
+};
