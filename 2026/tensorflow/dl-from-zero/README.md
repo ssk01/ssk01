@@ -11,7 +11,8 @@ dl-from-zero/
 ├── v1-prune/        图裁剪(训练图→推理图) + Python binding + 逻辑回归
 ├── v2-ps-worker/    PS/Worker 分布式训练(单机多进程)
 ├── v3-concurrent/   TF-like 图/运行时状态分离, 同一张图可并发推理
-└── v4-grad/         独立梯度子图(对应 TF gradients.py)
+├── v4-grad/         独立梯度子图(对应 TF gradients.py)
+└── v5-opt/          图优化: CSE + 常量折叠(对应 optimizer_cse.cc + constant_folding.cc)
 ```
 
 每版 = 上一版 + 一个新概念。建议按顺序读。
@@ -49,6 +50,12 @@ dl-from-zero/
 - **加分项**: RunState 改稠密数组按 `node->id` 索引(对应 TF executor 编译期定槽 + `vector<Entry>`), 弃用哈希表; 标量变量梯度用 `reduce_sum` 归约
 - 文件: `graph/gradients.h` `graph/graph.h` `runtime.h` `session.h`
 
+## v5-opt — 图优化: CSE + 常量折叠
+
+- **概念**: 图能跑 ≠ 图高效。执行前加编译期 pass(对应论文 §5 master 优化阶段): **CSE** 哈希 (type, 输入, 常量值) 合并重复子表达式(`optimizer_cse.cc`, 初始 commit 实有); **常量折叠** 输入全为常量的子图用同一个 forward 求值后原地转成 CONST(`constant_folding.cc`, 2016-01-25 加入)。与 v1 的 prune 构成图优化三件套 DCE / CSE / 常量折叠
+- **加分项**: 过滤规则逐条对应 TF `Equivalent()`(is_stateful / attrs / 输入全等 / 交换律规范化); Session run 前自动跑 pass pipeline(CSE → 折叠 → CSE), Graph 加结构代数 `generation` 让编译缓存自动失效
+- 文件: `graph/optimize.h` `graph/graph.h` `session.h` `main.cpp`(4 个 demo: CSE / 折叠 / 负例 / 三 pass 串联)
+
 ---
 
 ## 演进脉络(为什么这么排)
@@ -59,6 +66,7 @@ v1  图裁剪                        → 训练图/推理图分离
 v2  分布式                        → 变量放远一点(PS)
 v3  状态从图里挪出去              → 同一张图可并发跑
 v4  反向也变成图                  → 梯度子图统一进图, prune 自然剪掉
+v5  执行前先优化图                → CSE/常量折叠, 编译期消除浪费 (三件套: DCE/CSE/折叠)
 ```
 
 最后一版(v4)反过来验证了 TF 最核心的设计直觉:**训练和推理的差别, 从"运行时标记"变成"图结构上的可达性"**——这就是 `gradients.py` 把梯度建成子图的意义。
