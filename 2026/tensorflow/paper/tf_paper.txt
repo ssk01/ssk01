@@ -1,0 +1,1189 @@
+                                                 TensorFlow: A system for large-scale machine learning
+                                                Martı́n Abadi, Paul Barham, Jianmin Chen, Zhifeng Chen, Andy Davis, Jeffrey Dean,
+                                               Matthieu Devin, Sanjay Ghemawat, Geoffrey Irving, Michael Isard, Manjunath Kudlur,
+                                             Josh Levenberg, Rajat Monga, Sherry Moore, Derek G. Murray, Benoit Steiner, Paul Tucker,
+                                                 Vijay Vasudevan, Pete Warden, Martin Wicke, Yuan Yu, and Xiaoqiang Zheng
+
+                                                                                            Google Brain
+arXiv:1605.08695v2 [cs.DC] 31 May 2016
+
+
+
+
+                                         Abstract                                                         We introduce the TensorFlow system1 for experiment-
+                                                                                                       ing with new models, training them on large datasets, and
+                                         TensorFlow is a machine learning system that operates at      moving them into production. We have based TensorFlow
+                                         large scale and in heterogeneous environments. Tensor-        on years of experience with our first-generation system,
+                                         Flow uses dataflow graphs to represent computation,           DistBelief [21], both simplifying and generalizing it to en-
+                                         shared state, and the operations that mutate that state. It   able researchers to explore a wider variety of ideas with
+                                         maps the nodes of a dataflow graph across many machines       relative ease. TensorFlow supports both large-scale train-
+                                         in a cluster, and within a machine across multiple com-       ing and inference: it efficiently uses hundreds of powerful
+                                         putational devices, including multicore CPUs, general-        (GPU-enabled) servers for fast training, and it runs trained
+                                         purpose GPUs, and custom designed ASICs known as              models for inference in production on various platforms,
+                                         Tensor Processing Units (TPUs). This architecture gives       ranging from large distributed clusters in a datacenter,
+                                         flexibility to the application developer: whereas in previ-   down to performing inference locally on mobile devices.
+                                         ous “parameter server” designs the management of shared       At the same time, it is flexible and general enough to
+                                         state is built into the system, TensorFlow enables devel-     support experimentation and research into new machine
+                                         opers to experiment with novel optimizations and train-       learning models and system-level optimizations.
+                                         ing algorithms. TensorFlow supports a variety of appli-          TensorFlow uses a unified dataflow graph to repre-
+                                         cations, with particularly strong support for training and    sent both the computation in an algorithm and the state
+                                         inference on deep neural networks. Several Google ser-        on which the algorithm operates. We draw inspiration
+                                         vices use TensorFlow in production, we have released it       from the high-level programming models of dataflow sys-
+                                         as an open-source project, and it has become widely used      tems [2, 22, 75], and the low-level efficiency of parame-
+                                         for machine learning research. In this paper, we describe     ter servers [14, 21, 46]. Unlike traditional dataflow sys-
+                                         the TensorFlow dataflow model in contrast to existing sys-    tems, in which graph vertices represent functional compu-
+                                         tems, and demonstrate the compelling performance that         tation on immutable data, TensorFlow allows vertices to
+                                         TensorFlow achieves for several real-world applications.      represent computations that own or update mutable state.
+                                                                                                       Edges carry tensors (multi-dimensional arrays) between
+                                                                                                       nodes, and TensorFlow transparently inserts the appropri-
+                                         1    Introduction                                             ate communication between distributed subcomputations.
+                                                                                                       By unifying the computation and state management in a
+                                         In recent years, machine learning has driven advances in      single programming model, TensorFlow allows program-
+                                         many different fields [3, 5, 23, 24, 30, 27, 40, 45, 48,      mers to experiment with different parallelization schemes
+                                         50, 55, 68, 69, 73, 76]. We attribute this success to the     that, for example, offload computation onto the servers
+                                         invention of more sophisticated machine learning mod-         that hold the shared state to reduce the amount of network
+                                         els [42, 51], the availability of large datasets for tack-    traffic. We have also built various coordination protocols,
+                                         ling problems in these fields [10, 65], and the devel-        and achieved encouraging results with synchronous repli-
+                                         opment of software platforms that enable the easy use         cation, echoing recent results [11, 19] that contradict the
+                                         of large amounts of computational resources for training     1 TensorFlow can be downloaded from https://github.com/
+
+                                         such models on these large datasets [14, 21].              tensorflow/tensorflow.
+commonly held belief that asynchronous replication is re-            A distributed system for model training must use the
+quired for scalable learning [14, 21, 46].                        network efficiently. Many scalable algorithms train a
+   Over the past year, more than 60 teams at Google have          model using mini-batch gradient descent [21, 47], where a
+used TensorFlow, and we have released the system as an            worker reads the current version of the model and a small
+open-source project. Thanks to our large community of             batch of input examples, calculates an update to the model
+users we have gained experience with many different ma-           that reduces a loss function on those examples, and ap-
+chine learning applications. In this paper, we focus on           plies the update to the model. Mini-batch methods are
+neural network training as a challenging systems problem,         most effective when each worker uses the most current
+and select two representative applications from this space:       model as a starting point, which requires a large amount
+image classification and language modeling. These ap-             of data to be transferred to the worker with low latency.
+plications stress computational throughput and aggregate
+model size respectively, and we use them both to demon-           Accelerator support Machine learning algorithms of-
+strate the extensibility of TensorFlow, and to evaluate the       ten perform expensive computations, such as matrix mul-
+efficiency and scalability of our present implementation.         tiplication and multi-dimensional convolution, which are
+                                                                  highly parallelizable, but have many data dependencies
+                                                                  that require a tightly coupled implementation. The re-
+2     Background & Motivation                                     cent availability of general-purpose GPUs has provided a
+To make the case for developing TensorFlow, we start              large number of cores that can operate on fast local mem-
+by outlining the requirements for a large-scale machine           ory. For example, a single NVIDIA Titan X GPU card
+learning system (§2.1), then consider how related work            has 6 TFLOPS peak performance [60]. In 2012, state-of-
+meets or does not meet those requirements (§2.2).                 the-art results for different image classification tasks were
+                                                                  achieved using 16,000 CPU cores for three days [45], and
+                                                                  using two GPUs for six days [42]. Since then, GPU ven-
+2.1   Requirements                                                dors have innovated in their support for machine learning:
+                                                                  NVIDIA’s cuDNN library [13] for GPU-based neural net-
+Distributed execution A cluster of powerful comput-
+                                                                  work training accelerates several popular image models
+ers can solve many machine learning problems more effi-
+                                                                  by 2–4× when using version R4 in place of R2 [15].
+ciently, using more data and larger models.
+   Machine learning algorithms generally perform bet-                In addition to general-purpose devices, many special-
+ter with more training data. For example, recent break-           purpose accelerators for deep learning have achieved
+throughs in image classification models have benefited            significant performance improvements and power sav-
+from the public ImageNet dataset, which contains 136 gi-          ings. At Google, our colleagues have built the Tensor
+gabytes of digital images [65]; and language modeling has         Processing Unit (TPU) specifically for machine learn-
+benefited from efforts like the One Billion Word Bench-           ing, and it achieves an order of magnitude improve-
+mark [10]. The scale of these datasets motivates a data-          ment in performance-per-watt compared to alternative
+parallel approach to training: a distributed file system          state-of-the-art technology [38]. The Movidius Deep
+holds the data, and a set of workers processes different          Learning Accelerator uses a low-power Myriad 2 pro-
+subsets of data in parallel. Data-parallelism eliminates          cessor with custom vector processing units that accel-
+the I/O bottleneck for input data, and any preprocessing          erate many machine learning and computer vision algo-
+operations can be applied to input records independently.         rithms [53]. Ovtcharov et al. have achieved significant
+   Effective learned models for image recognition, lan-           performance improvements and power savings for some
+guage modeling, document clustering, and many other               convolutional models using field programmable gate ar-
+problems have a large number of parameters. For ex-               rays (FPGAs) [58]. Since it is difficult to predict the next
+ample, the current state-of-the-art image classification          popular architecture for executing machine learning algo-
+model, ResNet, uses 2.3 million floating-point parame-            rithms, we require that TensorFlow uses a portable pro-
+ters to classify images into one of 1000 categories [26].         gramming model that can target a generic device abstrac-
+The One Billion Word Benchmark has a vocabulary of                tion, and allows its operations to be specialized for new
+800,000 words, and it has been used to train language             architectures as they emerge.
+models with 1.04 billion parameters [39]. A distributed
+system can shard the model across many processes, to in- Training & inference support In addition to training,
+crease the available network bandwidth when many work- scalable and high-performance inference is a requirement
+ers are simultaneously reading and updating the model.    for using models in production [18]. Depending on the
+
+
+                                                              2
+nature of the application, the inference may be required           DryadLINQ with the ability to cache previously com-
+to produce results with very low latency in an interactive         puted datasets in memory, and is therefore better suited to
+service, or execute on a disconnected mobile device. If            iterative machine learning algorithms (such as k-means
+the model is large, it might require multiple servers to           clustering and logistic regression) when the input data fit
+participate in each inference computation, and thus re-            in memory. Dandelion extends DryadLINQ to support
+quire distributed computation support. Developers benefit          generating code for GPUs [63] and FPGAs [16].
+when they can use the same code to define a model for                 The principal limitation of a batch dataflow system is
+both training and inference. Training and inference de-            that it requires the input data to be immutable, and all
+mand similar performance, so we prefer a common well-              of the subcomputations to be deterministic, so that the
+optimized system for both computations. Since inference            system can re-execute subcomputations when machines
+can be computationally intensive (e.g., an image classi-           in the cluster fail. This feature—which is beneficial for
+fication model might perform 5 billion FLOPS per im-               many conventional workloads—makes updating a ma-
+age [70]), it must be possible to accelerate it with GPUs.         chine learning model a heavy operation. For example,
+                                                                   the SparkNet system for training deep neural networks on
+Extensibility Single-machine machine learning frame-               Spark takes 20 seconds to broadcast weights and collect
+works [36, 2, 17] have extensible programming models               updates from five workers [52]. As a result, these systems
+that enable their users to advance the state of the art with       must process larger batches in each model update step,
+new approaches, such as adversarial learning [25] and              which slows convergence [9]. We show in Subsection 6.3
+deep reinforcement learning [51]. We seek a system that            that TensorFlow can train larger models on larger clusters
+provides the same ability to experiment, and also allows           with step times as short as 2 seconds.
+users to scale up the same code to run in production. The             While not a batch dataflow system, Naiad [54] aug-
+system must support expressive control-flow and stateful           ments a dataflow model with streaming execution, stateful
+constructs, while also satisfying our other requirements.          vertices, and structured timestamps (“timely dataflow”)
+                                                                   that enable it to handle incremental updates and iterative
+                                                                   algorithms in the same computation. Naiad represents it-
+2.2    Related work                                                eration using cyclic dataflow graphs, which together with
+Single-machine frameworks Many machine learning                    mutable state make it possible to implement algorithms
+researchers carry out their work on a single—often GPU-            that require millisecond-scale latencies for coordination.
+equipped—computer [41, 42], and many flexible single-              Naiad is designed for computing on sparse, discrete data,
+machine frameworks have emerged to support this sce-               and does not support GPU (or any other form of) acceler-
+nario. Caffe [36] is a high-performance framework for              ation, but we borrow aspects of timely dataflow iteration
+training declaratively specified convolutional neural net-         in Subsection 3.4.
+works that runs on multicore CPUs and GPUs. Theano [2]
+allows programmers to express a model as a dataflow                Parameter servers Inspired by work on distributed
+graph, and generates efficient compiled code for train-            key-value stores, a parameter server architecture uses a set
+ing that model. Torch [17] has an imperative program-              of servers to manage shared state that is updated by a set of
+ming model for scientific computation (including machine           data-parallel workers. Unlike a standard key-value store,
+learning) that supports fine-grained control over the order        the write operation in a parameter server is specialized for
+of execution and memory utilization.                               parameter updates: it is typically an associative and com-
+   While these frameworks do not satisfy our require-              mutative combiner, like addition-assignment (+=), that is
+ment for distributed execution, TensorFlow’s program-              applied to the current parameter value and the incoming
+ming model is close to Theano’s dataflow representation            update to produce a new parameter value.
+(§3).                                                                 Parameter servers emerged as an architecture for scal-
+                                                                   able topic modeling [66], and our previous system DistBe-
+Batch dataflow systems Starting with MapRe-                        lief [21] showed how a similar architecture could be ap-
+duce [22], batch dataflow systems have been applied                plied to deep neural network training. Project Adam [14]
+to a large number of machine learning algorithms [71],             demonstrated an efficient parameter server architecture
+and more recent systems have focused on increasing                 for training convolutional neural networks, and Li et al.’s
+expressivity and performance. DryadLINQ [74] adds a                “Parameter Server” [46] added innovations in consistency
+high-level query language that supports more sophisti-             models, fault tolerance, and elastic rescaling. Despite ear-
+cated algorithms than MapReduce. Spark [75] extends                lier skepticism that parameter servers would be compati-
+
+                                                               3
+ble with GPU acceleration [14], Cui et al. have recently            as possible. Dataflow with mutable state enables Tensor-
+shown that GeePS [19], a parameter server specialized               Flow to mimic the functionality of a parameter server,
+for use with GPUs, can achieve speedups on modest-sized             but with additional flexibility, because it becomes pos-
+clusters.                                                           sible to execute arbitrary dataflow subgraphs on the ma-
+   MXNet [12] is a recent system that uses a parameter              chines that host the shared model parameters. As a re-
+server to scale training, supports GPU acceleration, and            sult, our users have been able to experiment with different
+includes a flexible programming model with interfaces               optimization algorithms, consistency schemes, and paral-
+for many languages. While MXNet partially fulfills our              lelization strategies.
+extensibility requirements, the parameter server is “priv-
+ileged” code, which makes it difficult for researchers to
+customize the handling of large models (§4.2).                      3.1   Dataflow graph elements
+   The parameter server architecture meets most of our
+                                                                    In a TensorFlow graph, each vertex represents an atomic
+requirements, and our DistBelief [21] uses parameter
+                                                                    unit of computation, and each edge represents the out-
+servers with a Caffe-like model definition format [36] to
+                                                                    put from or input to a vertex. We refer to the compu-
+great effect. We found this architecture to be insufficiently
+                                                                    tation at vertices as operations, and the values that flow
+extensible, because adding a new optimization algorithm,
+                                                                    along edges as tensors, because TensorFlow is designed
+or experimenting with an unconventional model archi-
+                                                                    for mathematical computation, and uses tensors (or multi-
+tecture would require our users to modify the parameter
+                                                                    dimensional arrays) to represent all data in those compu-
+server implementation, which uses C++ for performance.
+                                                                    tations.
+While some of the practitioners who use that system are
+comfortable with making these changes, the majority are
+accustomed to writing models in high-level languages,               Tensors In TensorFlow, we model all data as tensors
+such as Python and Lua, and the complexity of the high-             (dense n-dimensional arrays) with each element having
+performance parameter server implementation is a barrier            one of a small number of primitive types, such as int32,
+to entry. With TensorFlow we therefore sought a high-               float32, or string. Tensors naturally represent the
+level programming model that allows users to customize              inputs to and results of the common mathematical oper-
+the code that runs in all parts of the system (§3).                 ations in many machine learning algorithms: for exam-
+                                                                    ple, a matrix multiplication takes two 2-D tensors and
+                                                                    produces a 2-D tensor; and a mini-batch 2-D convolution
+3     TensorFlow execution model                                    takes two 4-D tensors and produces another 4-D tensor.
+                                                                       All tensors in TensorFlow are dense. This decision en-
+TensorFlow uses a single dataflow graph to represent
+                                                                    sures that the lowest levels of the system can have sim-
+all computation and state in a machine learning algo-
+                                                                    ple implementations for memory allocation and serializa-
+rithm, including the individual mathematical operations,
+                                                                    tion, which reduces the overhead imposed by the frame-
+the parameters and their update rules, and the input pre-
+                                                                    work. To represent sparse tensors, TensorFlow offers two
+processing (Figure 1). Dataflow makes the communi-
+                                                                    alternatives: either encode the data into variable-length
+cation between subcomputations explicit, and therefore
+                                                                    string elements of a dense tensor, or use a tuple of
+makes it easy to execute independent computations in par-
+                                                                    dense tensors (e.g., an n-D sparse tensor with m non-zero
+allel, and partition the computation across multiple dis-
+                                                                    elements could be represented an m × n index matrix and
+tributed devices. Dataflow TensorFlow differs from batch
+                                                                    a length-m value vector). The size of a tensor can vary in
+dataflow systems (§2.2) in two respects:
+                                                                    one or more dimensions, making it possible to represent
+    • The model supports multiple concurrent executions             sparse tensors with differing numbers of elements, at the
+      on overlapping subgraphs of the overall graph.                cost of more sophisticated shape inference.
+
+   • Individual vertices may have mutable state that can
+      be shared between different executions of the graph. Operations An operation takes m ≥ 0 tensors as input,
+                                                           and produces n ≥ 0 tensors as output. An operation has
+   The key observation in the parameter server architec- a named “type” (such as Const, MatMul, or Assign)
+ture [21, 14, 46] is that mutable state is crucial when and may have zero or more compile-time attributes that
+training very large models, because it becomes possible to determine its behavior. An operation can be generic and
+make in-place updates to very large parameters, and prop- variadic at compile-time: its attributes determine both the
+agate those updates to parallel training steps as quickly expected types and arity of its inputs and outputs.
+
+
+                                                                4
+                                                                                                  False branch
+ Mod          Part           Stitch        Sum
+
+
+
+
+                                                                                                 Parameters                  Periodic
+                                                                                                                             checkpoint
+
+                                                                                       Read params             Apply grads
+
+    Input                                                                                     Fwd              Back
+                  Reader                                                                                                      Dist. FS
+     data
+                                                  Preprocessing                                     Training
+
+
+Figure 1: A schematic TensorFlow dataflow graph for a training pipeline contains subgraphs for reading input data,
+preprocessing, training, and checkpointing state.
+
+
+   For example, the simplest operation Const has no in-                   API for executing a graph allows the client to specify the
+puts and a single output. Const has an attribute T that                   subgraph that should be executed. A subgraph is spec-
+determines the type of its output, and an attribute Value                 ified declaratively: the client selects zero or more edges
+that determines the value that it produces. AddN is vari-                 to feed input tensors into the dataflow, and one or more
+adic: it has a type attribute T, and an integer attribute N               edges to fetch output tensors from the dataflow; the run-
+that defines how many inputs (of type T) it accepts.                      time then prunes the graph to contain the necessary set
+                                                                          of operations. Each invocation of the API is called a step,
+Stateful operations: variables An operation can con-                      and TensorFlow supports multiple concurrent steps on the
+tain mutable state that is read and/or written each time it               same graph, where stateful operations enable coordination
+executes. A Variable operation owns a mutable buffer                      between the steps.
+that is used to store the shared parameters of a model as                    Figure 1 shows a typical training application, with mul-
+it is trained. A Variable has no inputs, and produces                     tiple subgraphs that execute concurrently, and interact
+a reference handle, which acts as a typed capability for                  through shared variables and queues. The core training
+            Training libraries        Inference libs                      subgraph depends on a set of model parameters, and in-
+reading and   writing the buffer. A      Read operation takes
+a reference handle     as input,
+               Python client     andC++ client the
+                                       outputs    ... value of the        put batches from a queue. Many concurrent steps of the
+variable as a dense tensor. Several operations can modify                 training subgraph update the model based on different in-
+the underlying buffer: forCexample,
+                                 API
+                                            AssignAdd takes               put batches, to implement data-parallel training. To fill
+a reference handle r and a tensor value x, and when exe-                  the input queue, concurrent preprocessing steps transform
+             Distributed master     Dataflow executor
+cuted performs the update State0 [r] ← State[r] + x. Sub-                 individual input records (e.g., decoding images and apply-
+                                                              0           ing random distortions), and a separate I/O subgraph reads
+sequent Read(r)      operations
+             Const Var           produce
+                        MatMul Conv2D  ReLUthe value
+                                             Queue   ... State [r].
+                     Kernel implementations                               records from a distributed file system. A checkpointing
+Stateful operations: queues TensorFlow includes sev-                      subgraph runs periodically for fault tolerance (§4.3).
+eral queue RPC      RDMA ...
+              implementations,    CPU support
+                                 which  GPU ... more ad-                     Partial and concurrent execution is responsible for
+vanced forms of coordination. The simplest
+              Networking layer     Device layer   queue is                much of TensorFlow’s flexibility. Adding mutable state
+FIFOQueue, which owns an internal queue of tensors,                       and coordination via queues makes it possible to specify
+and supports concurrent access. Like a Variable, the                      a wide variety of model architectures in “unprivileged”
+FIFOQueue operation produces a reference handle that                      code, which enables advanced users to experiment with-
+can be consumed by one of the standard queue operations,                  out modifying the internals of the TensorFlow runtime.
+such as Enqueue and Dequeue. These operations re-
+spectively push their input onto the tail of the queue, or                3.3   Distributed execution
+pop the head element and output it. Enqueue will block
+if its given queue is full, and Dequeue will block if itsDataflow simplifies distributed execution, because it
+given queue is empty. When queues are used in an input   makes communication between subcomputations explicit.
+preprocessing pipeline, this blocking provides backpres- In principle, the same TensorFlow program can be de-
+sure; it also supports synchronization (§4.4).           ployed to a distributed cluster of GPUs for training, a
+                                                         cluster of TPUs for serving, and a cellphone for mobile
+                                                         inference.
+3.2 Partial and concurrent execution
+                                                            Each operation resides on a particular device, such as a
+TensorFlow uses the dataflow graph to represent all pos- CPU or GPU in a particular task. A device is responsible
+sible computations in a particular application, and the for executing a kernel for each operation assigned to it.
+
+
+                                                                      5
+ TensorFlow
+Shard 0     allowsGather
+                   multiple kernels to be registered for
+                                                                                        True         True branch
+ a single operation, with specialized implementations for
+ a particular device or data type (see §5 for details). For
+ many1 operations, Gather
+Shard                   such as element-wise operators (Add,                           Switch                           Merge
+ Sub, etc.), we use a single kernel implementation that can
+ be compiled for CPU and GPU using different compilers.
+    The TensorFlow       runtime    places operations     on devices,                                False branch
+  Mod          Part             Stitch        Sum
+ subject to implicit or explicit device constraints in the
+ graph. The placement algorithm computes a feasible set
+ of devices for each operation, calculates the sets of op-                   Figure 2: A conditional graph using Switch and Merge
+ erations that must be colocated, and selects a satisfying
+ device for each colocation group. Stateful operations and                      TensorFlow supports      conditional control Periodic
+                                                                                                     Parameters               flow using
+ operations their state must be placed on the same device,                                                                   checkpoint
+                                                                             the primitive Switch and Merge operations, which are
+ which leads to implicit colocation constraints. In addi-                    based on Arvind    and Culler’s original   dynamic dataflow
+ tion, the user may specify partial device preferences such                                Read params         Apply grads
+                                                                             architectures [4]. Switch acts like a demultiplexer: it
+ as “any device in a particular task”, or “a GPU in any                      takes a data input and
+     Input                                                                                        Fwda control Back
+                                                                                                               input, and uses the control
+ task”,             Reader
+      dataand the runtime will respect these constraints. A                                             its two outputs should Dist.
+                                                                             input to select which ofTraining                        FS a
+                                                                                                                                produce
+ typical training application will use client-side   Preprocessing
+                                                            program-         value. The Switch output not taken receives a special
+ ming constructs to add constraints such that, for example,                  dead value, which propagates recursively through the rest
+ parameters are distributed among a set of “PS” tasks.                       of the graph until it reaches a Merge operation. Merge
+    Once the operations in a graph have been placed, and                     acts like a multiplexer: it forwards at most one non-dead
+ the partial subgraph has been computed for a step (§3.2),                   input to its output, or produces a dead output if both of its
+ TensorFlow partitions the operations into per-device sub-                   inputs are dead. We use these primitives to build a non-
+ graphs. A per-device subgraph for device d contains all                     strict conditional subgraph (Figure 2) that executes one of
+ of the operations that were assigned to d, with additional                  two branches, based on the runtime value of a tensor.
+ Send and Recv operations that replace edges across de-                         Switch and Merge also support iteration. The imple-
+ vice boundaries. Send transmits its single input to a spec-                 mentation of loops in TensorFlow is based on Switch
+ ified device as soon as the tensor is available, using a ren-               and Merge [4], with additional structural constraints
+ dezvous key to name the value. Recv has a single output,                    based on timely dataflow [54] to simplify the distributed
+ and blocks until the value for a specified rendezvous key                   execution state. Like timely dataflow, TensorFlow sup-
+ is available locally, before producing that value. Send                     ports multiple concurrent iterations and nested loops, but
+ and Recv have specialized implementations for several                       simplifies memory management by restricting each oper-
+ device-type pairs; we describe some of these in Section 5.                  ation to producing a single value per output per iteration.
+    We optimized TensorFlow for executing large sub-
+ graphs repeatedly with low latency. Once the graph for
+ a step has been pruned, placed, and partitioned, its sub-                   4     Extensibility case studies
+             Training libraries         Inference libs
+ graphs are cached in their respective devices. A client
+ session maintains
+                Python the    mappingC++
+                         client          from    step...definitions to
+                                            client                           By choosing a unified dataflow graph to represent all com-
+ cached subgraphs, so that a distributed step on a large                     putation in TensorFlow, we have enabled users to experi-
+                                 C API
+ graph can be initiated with one small message to each par-                  ment with features that were built into the runtime of our
+ ticipating task.   This model favors
+              Distributed master
+                                           static, reusable graphs,
+                                       Dataflow executor                     previous system [21]. In this section, we discuss four ex-
+ but it can support dynamic computations using dynamic                       tensions to TensorFlow that we have built using simple
+ control flow,   as the
+              Const  Var next
+                         MatMulsubsection
+                                 Conv2D ReLUdescribes.
+                                                Queue ...                    dataflow primitives and “user-level” code.
+                      Kernel implementations
+
+ 3.4     Dynamic control
+           RPC RDMA   ... flow
+                             CPU              GPU ...                        4.1    Differentiation and optimization
+              Networking layer          Device layer
+ Most evaluation in TensorFlow is strict: all inputs to an                   Many learning algorithms train a set of parameters using
+ operation must be computed before the operation exe-                        some variant of stochastic gradient descent (SGD), which
+ cutes. Advanced algorithms—such as efficiently training                     entails computing the gradients of a cost function with re-
+ a recurrent neural network [37]—require dynamic control                     spect to those parameters, then updating the parameters
+ flow, which for efficiency requires non-strict evaluation.                  based on those gradients. We implement a user-level li-
+
+
+                                                                         6
+brary for TensorFlow that automatically differentiates ex-                  Shard 0               Gather
+pressions. A user can, for example, define a neural net-
+work as a composition of layers and a loss function, and
+the library will derive the backpropagation [64].                           Shard 1               Gather
+   The differentiation algorithm performs breadth-first
+search to identify all of the backwards paths from the tar-
+get operation (e.g., a loss function) to a set of parameters,                 Mod          Part            Stitch      Sum
+and sums the partial gradients that each path contributes.
+Our users frequently specialize the gradients for some op-
+erations, and they have implemented optimizations like              Figure 3: Schematic dataflow graph for a sparse embed-
+batch normalization [32] and gradient clipping [59] to ac-          ding layer containing a two-way sharded embedding ma-
+celerate training and make it more robust. We have ex-              trix.
+tended the algorithm to differentiate conditional and iter-
+ative subcomputations (§3.4), and developed techniques              learned by backpropagation [29]. For example, in a lan-
+for managing GPU memory when iterating (and accumu-                 guage model, a training example might be a sparse vector
+lating intermediate values) over long sequences in the in-          with non-zeroInputentries corresponding to the IDs of words
+put data (similar to GeePS [19]).                                                              Reader
+                                                                                  data and the distributed representation for each
+                                                                    in a vocabulary,
+   TensorFlow users can also experiment with a wide                                                                             Preprocessing
+                                                                    word will be a lower-dimensional vector [6].
+range of optimization algorithms, which compute new
+                                                                       Inference proceeds by multiplying a batch of b sparse
+values for the parameters in each training step. SGD is
+                                                                    vectors against an n × d embedding matrix, where n is the
+easy to implement in a parameter server: for each param-
+                                                                    number of words in the vocabulary, and d is the desired di-
+eter W , gradient ∂L/∂W , and learning rate α, the update
+                                                                    mensionality, to produce a much smaller b × d dense ma-
+rule is W 0 ← W − α × ∂L/∂W . A parameter server can
+                                                                    trix representation; for training, most optimization algo-
+implement SGD by using -= as the write operation, and
+                                                                    rithms modify only the rows of the embedding matrix that
+writing α × ∂L/∂W to each W after a training step.
+                                                                    were read by the sparse multiplication. In many Tensor-
+   However, there are many more advanced optimization               Flow models that process sparse data, n×d can amount to
+schemes that are difficult to express as a single write op-         gigabytes of parameters: e.g., a large language model may
+eration. For example, the Momentum algorithm accumu-                use over 109 parameters with a vocabulary of 800,000
+lates a “velocity” for each parameter based on its gradient         words [39], and we have experience with document mod-
+over multiple iterations, then computes the parameter up-           els [20] where the parameters occupy several terabytes.
+date from that accumulation; and many refinements to this           Such models are too large to copy to a worker on every
+algorithm have been proposed [67]. To implement Mo-                 use, or even to store in RAM on a single host.
+mentum in DistBelief [21], we had to modify the C++
+                                                                       We implement sparse embedding layers in the Tensor-
+code of the parameter server to change the representa-
+                                                                    Flow graph as a composition of primitive operations. Fig-
+tion of parameter data, and execute arbitrary code in the
+                                                                    ure 3 shows a simplified graph for an embedding layer that
+write operation; such modifications are beyond the ma-
+                                                                    is split across twoTraining
+                                                                                          parameter    server tasks.
+                                                                                                  libraries           The core
+                                                                                                                   Inference  libsoper-
+jority of our users. Optimization algorithms are the topic
+                                                                    ation of this subgraph is Gather, which extracts a sparse
+of active research, and our users have implemented sev-                                     Python client         C++ client ...
+                                                                    set of rows from a tensor,      and TensorFlow colocates this
+eral on top of TensorFlow, including Momentum, Ada-
+                                                                    operation with the variable on which        it operates. The dy-
+                                                                                                            C API
+grad, Adadelta, RMSProp, Adam, and L-BFGS. These
+                                                                    namic partition (Part) operation divides the incoming
+can be built in TensorFlow using Variable operations                                      Distributed  masterthat Dataflow executor
+                                                                    indices into variable-sized     tensors       contain the   indices
+and primitive mathematical operations without needing to
+                                                                    destined for each shard, and the dynamic static (Stitch)
+modify the underlying system, which makes it easy to ex-                                  Const Var MatMul Conv2D ReLU Queue ...
+                                                                    operation reassembles      the partial results from each shard
+periment with new algorithms as they emerge.                                                       Kernel implementations
+                                                                    into a single result tensor. Each of these operations has
+                                                                    a corresponding gradient,       so it supportsCPU
+                                                                                           RPC RDMA ...
+                                                                                                                    automatic
+                                                                                                                          GPU ...
+                                                                                                                                 differ-
+4.2    Handling very large models                                   entiation (§4.1), and the result is a set of sparse update
+                                                                                           Networking layer          Device layer
+                                                                    operations that act on just the values that were originally
+To train a model on high-dimensional data, such as words            gathered from each of the shards.
+in a corpus of text [7], it is common to use a distributed             While sparse reads and updates are possible in a pa-
+representation, which embeds a training example as a                rameter server [46], TensorFlow adds the flexibility to
+pattern of activity across several neurons, which can be            offload arbitrary computation onto the devices that host
+
+
+                                                                7
+the shared parameters. For example, classification mod-            Restore as necessary. This behavior is customizable:
+els typically use a softmax classifier that multiplies the         the user can apply different policies to subsets of the vari-
+final output by a weight matrix with c columns, where c            ables in a model, or customize the checkpoint retention
+is the number of possible classes; for a language model,           scheme. For example, many users retain checkpoints with
+c is the size of the vocabulary, which can be large. Our           the highest score in a custom evaluation metric. The im-
+users have experimented with several schemes to accel-             plementation is also reusable: it may be used for model
+erate the softmax calculation. The first is similar to an          fine-tuning and unsupervised pre-training [43, 45], which
+optimization in Project Adam [14], whereby the weights             are forms of transfer learning, in which the parameters
+are sharded across several tasks, and the multiplication           of a model trained on one task (e.g. recognizing general
+and gradient calculation are colocated with the shards.            images) are used as the starting point for another task
+More efficient training is possible using a sampled soft-          (e.g. recognizing particular breeds of dog). Having check-
+max [35], which performs a sparse multiplication based             point and parameter management as programmable oper-
+on the true class for an example and a set of randomly             ations in the graph gives users the flexibility to implement
+sampled false classes. We compare the performance of               schemes like these and others that we have not anticipated.
+these two schemes in §6.4.                                            The checkpointing library does not attempt to produce
+                                                                   consistent checkpoints: if training and checkpointing ex-
+                                                                   ecute concurrently, the checkpoint may include none, all,
+4.3    Fault tolerance                                             or some of the updates from the training step. This is no
+                                                                   problem for models that we train by asynchronous gra-
+Training a model can take several hours or days, even us-
+                                                                   dient descent [21]. Consistent checkpoints require addi-
+ing a large number of machines [21, 14]. It is desirable
+                                                                   tional synchronization to ensure that checkpointing does
+to be able to train a model using non-dedicated resources,
+                                                                   not run concurrently with update operations. For exam-
+for example using a cluster manager, like Mesos [28] or
+                                                                   ple, one can use the scheme in next subsection to take a
+Borg [72], that does not guarantee availability of the same
+                                                                   checkpoint after the synchronous update step.
+resources for the duration of the training process. There-
+fore, a TensorFlow job is likely to experience failure dur-
+ing the training process, and we require some form of              4.4    Synchronous replica coordination
+fault tolerance. However, failures are unlikely to be so
+common that individual operations need fault tolerance,            SGD is robust to asynchrony [62], and previous systems
+so a mechanism like Spark’s RDDs [75] would impose                 train deep neural networks using asynchronous param-
+significant overhead for little benefit. There is no need          eter updates [21, 14], which are believed scalable be-
+to make every write to the parameter state durable, be-            cause they maintain high throughput in the presence of
+cause we can recompute any update from the input data,             stragglers. The increased throughput comes at the cost
+and many learning algorithms do not require strong con-            of training steps using stale data. Some have recently
+sistency [62]. Although we do not use strong consistency           revisited the assumption that synchronous training does
+for the training state, we rely on a system like Chubby [8]        not scale [11, 19]. Since GPUs enable training with
+or ZooKeeper [31] to map task IDs to IP addresses.                 hundreds—rather than thousands [45]—of machines, it
+   We implement user-level checkpointing for fault tol-            may be possible to train a model synchronously in less
+erance in TensorFlow, using primitive operations in the            time than asynchronous training on the same machines.
+graph (Figure 1): Save writes one or more tensors to a                Though we designed TensorFlow for asynchronous
+checkpoint file, and Restore reads one or more tensors             training, we have begun experimenting with synchronous
+from a checkpoint file. Our typical configuration connects         methods. The TensorFlow graph enables users to change
+each Variable in a task to the same Save operation,                how parameters are read and written when training a
+with one Save per task, to maximize the I/O bandwidth              model, and we implement three alternatives. In the asyn-
+to a distributed file system. The Restore operations               chronous case (Figure 4(a)), each worker reads the current
+read named tensors from a file, and a standard Assign              value when the step begins, and applies its gradient to the
+stores the restored value in its respective variable. During       different current value at the end: this ensures high utiliza-
+training, a typical client runs all of the Save operations         tion, but the individual steps use stale information, mak-
+periodically to produce a new checkpoint; when the client          ing each step less effective. The synchronous cases use
+starts up, it attempts to Restore the latest checkpoint.           queues (§3.1) to coordinate execution: a blocking queue
+   TensorFlow includes a client library for constructing           acts as a barrier to ensure that all workers read the same
+the appropriate graph structure, and invoking Save and             parameter version, and a second queue accumulates mul-
+
+                                                               8
+    data                                                                                                                  Dist. FS
+                                                     Preprocessing                               Training
+
+
+
+
+                    (a) Asynchronous replication                 (b) Synchronous replication       (c) Synchronous w/ backup worker
+    PS
+
+
+ Worker 1
+
+ Worker 2
+
+ Worker 3
+
+
+Figure 4: Three parameter synchronization schemes for a single parameter in data-parallel training (§4.4): (a) asyn-
+chronous, (b) synchronous without backup workers, and (c) synchronous with backup workers.
+
+            Training libraries            Inference libs                 portability and performance: it runs on several operating
+                                                     ...
+                                                                         systems including Linux, Mac OS X, Android, and iOS;
+               Python client          C++ client
+                                                                         the x86 and various ARM-based CPU architectures; and
+                                 C API                                   NVIDIA’s Kepler, Maxwell, and Pascal GPU microar-
+                                                                         chitectures. The implementation is open-source, and we
+             Distributed master      Dataflow executor                   have accepted several external contributions that enable
+                                                                         TensorFlow to run on other architectures.
+             Const Var MatMul    Conv2D    ReLU Queue ...
+                     Kernel implementations
+                                                                            The distributed master translates user requests into ex-
+                                                                         ecution across a set of tasks. Given a graph and a step def-
+             RPC     RDMA ...            CPU     GPU ...                 inition, it prunes (§3.2) and partitions (§3.3) the graph to
+             Networking layer              Device layer
+                                                                         obtain subgraphs for each participating device, and caches
+                                                                         these subgraphs so that they may be re-used in subsequent
+                                                                         steps. Since the master sees the overall computation for a
+     Figure 5: The layered TensorFlow architecture.                      step, it applies standard optimizations such as common
+                                                                         subexpression elimination and constant folding; pruning
+                                                                         is a form of dead code elimination. It then coordinates ex-
+tiple gradient updates in order to apply them atomically.                ecution of the optimized subgraphs across a set of tasks.
+The simple synchronous version (Figure 4(b)) accumu-                        The dataflow executor in each task handles requests
+lates updates from all workers before applying them, but                 from the master, and schedules the execution of the ker-
+slow workers limit overall throughput.                                   nels that comprise a local subgraph. We optimize the
+   To mitigate stragglers, we implement backup work-                     dataflow executor for running large, fine-grained graphs
+ers (Figure 4(c), [11]), which are similar to MapReduce                  with low overhead; our current implementation dispatches
+backup tasks [22]. Whereas MapReduce starts backup                       approximately 2,000,000 null operations per second. The
+tasks reactively—after detecting a straggler—our backup                  dataflow executor dispatches kernels to local devices and
+workers run proactively, and the aggregation takes the first             runs kernels in parallel when possible: e.g., by using mul-
+m of n updates produced. We exploit the fact that SGD                    tiple cores in a CPU device, or multiple streams on a GPU.
+samples training data randomly, so each worker processes                    The runtime contains over 200 standard operations, in-
+a different random batch. In Subsection 6.3 we show how                  cluding mathematical, array manipulation, control flow,
+backup workers improve throughput by up to 15%.                          and state management operations. Many of the opera-
+                                                                         tion kernels are implemented using Eigen::Tensor [34],
+                                                                         which uses C++ templates to generate efficient parallel
+5    Implementation                                                      code for multicore CPUs and GPUs; however, we lib-
+                                                                         erally use libraries like cuDNN [13] to implement ker-
+We implement TensorFlow as an extensible, cross-                         nels where a more efficient specialization is possible. We
+platform library. Figure 5 illustrates the system archi-                 have also implemented support for quantization, which
+tecture: a thin C API separates user-level in various lan-               enables faster inference in environments such as mobile
+guages from the core library. In this section, we discuss                devices and high-throughput datacenter applications, and
+the implementation of the various components.                            use the gemmlowp low-precision matrix multiplication
+   The core TensorFlow library is implemented in C++ for                 library [33] to accelerate quantized computation.
+
+
+                                                                     9
+   We specialize Send and Recv operations for each            researchers to experiment with new techniques, and this
+pair of source and destination device types. Trans-           evaluation demonstrates that the system (i) has little over-
+fers between local CPU and GPU devices use the                head, and (ii) can employ large amounts of computation to
+cudaMemcpyAsync() API to overlap computation and              accelerate real-world applications. While techniques like
+data transfer; transfers between two local GPUs use DMA       synchronous replication can enable some models to con-
+to relieve pressure on the host. For transfers between        verge in fewer steps overall, we defer the analysis of such
+tasks, TensorFlow supports multiple protocols, including      improvements to other papers.
+gRPC over TCP, and RDMA over Converged Ethernet.
+We are also investigating optimizations for GPU-to-GPU
+communication that use collective operations [57].
+                                                              6.1    Single-machine benchmarks
+   Section 4 describes features that we implement totally     Although TensorFlow is a system for “large-scale” ma-
+above the C API, in user-level code. Typically, users         chine learning, it is imperative that scalability does not
+compose standard operations to build higher-level ab-         mask poor performance at small scales [49]. Table 1
+stractions, such as neural network layers, optimization       contains results from Chintala’s independent benchmark
+algorithms (§4.1), and sharded embedding computations         of convolutional models on TensorFlow and three single-
+(§4.2). TensorFlow supports multiple client languages,        machine frameworks [15]. All frameworks use a six-core
+and we have prioritized support for Python and C++, be-       Intel Core i7-5930K CPU at 3.5 GHz and an NVIDIA Ti-
+cause our internal users are most familiar with these lan-    tan X GPU.
+guages. As features become more established, we typi-
+cally port them to C++, so that users can access an opti-                                Training step time (ms)
+                                                                  Library     AlexNet   Overfeat    OxfordNet    GoogleNet
+mized implementation from all client languages.
+                                                                 Caffe [36]       324        823          1068        1935
+   If it is difficult or inefficient to represent a subcom-      Neon [56]         87        211           320         270
+putation as a composition of operations, users can reg-         Torch [17]         81        268           529         470
+ister additional kernels that provide an efficient imple-       TensorFlow         81        279           540         445
+mentation written in C++. We have found it profitable
+                                                              Table 1: Step times for training four convolutional models
+to hand-implement fused kernels for some performance
+                                                              with different libraries, using one GPU. All results are for
+critical operations, such as a the ReLU and Sigmoid ac-
+                                                              training with 32-bit floats. The fastest library for each
+tivation functions and their corresponding gradients. We
+                                                              model is shown in bold.
+are currently investigating automatic kernel fusion using
+Halide [61] and other compiler-based techniques.
+   In addition to the core runtime, our colleagues have          Table 1 shows that TensorFlow achieves shorter step
+built several tools that aid users of TensorFlow. These in-   times than Caffe [36], and performance within 6% of the
+clude serving infrastructure for running inference in pro-    latest version of Torch [17]. We attribute the similar per-
+duction, a visualization dashboard that enables users to      formance of TensorFlow and Torch to the fact that both
+follow the progress of a training run, a graph visualizer     use the same version of the cuDNN library [13], which
+that helps users to understand the connections in a model,    implements the convolution and pooling operations on
+and a distributed profiler that traces the execution of a     the critical path for training; Caffe uses open-source im-
+computation across multiple devices and tasks. We de-         plementations for these operations that are simpler but
+scribe these tools in an extended whitepaper [1], and they    less efficient than cuDNN. The Neon library [56] outper-
+can be downloaded from the project repository.                forms TensorFlow on three of the models, by using hand-
+                                                              optimized convolutional kernels [44] implemented in as-
+                                                              sembly language; in principle, we could implement these
+6    Evaluation                                               kernels in TensorFlow, but we have not yet done so.
+
+In this section, we evaluate the performance of Tensor-       6.2    Synchronous replica microbenchmark
+Flow on several synthetic and realistic workloads. Unless
+otherwise stated, we run all experiments on a shared pro-     The performance of our coordination implementation
+duction cluster, and all figures plot median values with      (§4.4) is the main limiting factor for scaling with addi-
+error bars showing the 10th and 90th percentiles.             tional machines. Figure 6 shows that number of null train-
+   Here we focus on system performance metrics, rather        ing steps that TensorFlow performs per second for vary-
+than learning objectives like time to accuracy. TensorFlow    ing model sizes, and increasing numbers of synchronous
+is a system that allows machine learning practitioners and    workers. In a null training step, a worker fetches the
+
+
+                                                          10
+                     10000                                      tation across a cluster of GPU-enabled servers. In these
+                                                                experiments, we focus on Google’s Inception-v3 model,
+                                                                which achieves 78.8% accuracy the ILSVRC 2012 image
+Batches per second
+
+
+     1000                                                       classification challenge [70]; the same techniques apply
+                                                                to other deep convolutional models—such as Microsoft’s
+      100                                                       ResNet [26]—that TensorFlow users have implemented.
+                                                                We investigate the scalability of training the Inception-v3
+                                                                model using multiple replicas. We configure a Tensor-
+       10                                        Scalar
+                                                 Sparse 1GB     Flow job with 17 PS tasks, and vary the number of worker
+                                                 Sparse 16GB
+                                                 Dense 100M     tasks. Each worker task has one NVIDIA K40 GPU and
+         1                                       Dense 1GB      5 IvyBridge cores, and a PS task has 8 IvyBridge cores.
+           1    2        5      10        25     50         100 We investigate the effect of coordination (§4.4) on training
+                        Number of workers                       performance, using up to 200 workers to validate recent
+                                                                promising results for synchronous training [11, 19]. In
+Figure 6: Baseline throughput for synchronous replication particular, if synchronous training can be made efficient,
+with a null model. Sparse accesses enable TensorFlow to a model such as Inception-V3 will train in fewer steps,
+handle larger models, such as embedding matrices (§4.2). and converge to a higher accuracy than with asynchronous
+                                                                training [11].
+shared model parameters from 16 PS tasks, performs a
+                                                                   Training throughput improves to 2,300 images per sec-
+trivial computation, and sends updates to the parameters.
+                                                                ond as we increase the number of workers to 200, but with
+   The Scalar curve in Figure 6 shows the best perfor-
+                                                                diminishing returns (Figure 7(a)). Figures 7(b) and (c) ex-
+mance that we could expect for a synchronous training
+                                                                plain the limits to scaling: as we add more workers, the
+step, because only a single 4-byte value is fetched from
+                                                                step time increases, because there is more contention on
+each PS task. The median step time is 1.8 ms using a sin-
+                                                                the PS tasks, both at the network interface and in the ag-
+gle worker, growing to 8.8 ms with 100 workers. These
+                                                                gregation of updates. As expected, for all configurations,
+times measure the overhead of the synchronization mech-
+                                                                synchronous steps are longer than asynchronous steps,
+anism, and capture some of the noise that we expect when
+                                                                because all workers must wait for the slowest worker to
+running on a shared cluster.
+                                                                catch up before starting the next step. While the median
+   The Dense curves show the performance of a null step
+                                                                synchronous step is approximately 10% longer than an
+when the worker fetches the entire model. We repeat the
+                                                                asynchronous step with the same workers, above the 90th
+experiment with models of size 100 MB and 1 GB, with
+                                                                percentile the synchronous performance degrades sharply,
+the parameters sharded equally over 16 PS tasks. The me-
+                                                                because stragglers disproportionately impact the tail.
+dian step time for 100 MB increases from 147 ms with one
+worker to 613 ms with 100 workers. For 1 GB, it increases          To mitigate tail latency, we can add backup workers,
+from 1.01 s with one worker to 7.16 s with 100 workers.         so that a step completes when the first m of n tasks pro-
+   For large models, it is typical that a training step ac- duce gradients. Figure 8 shows the effect on step time of
+cesses only a subset of the parameters, and the Sparse adding backup workers to a 50-worker Inception training
+curves show the throughput of the embedding lookup op- job. Each additional backup worker up to and including
+eration from Subsection 4.2. Each worker reads 32 ran- the fourth reduces the median step time, because the prob-
+domly selected entries from a large embedding matrix ability of a straggler affecting the step decreases. Adding
+containing 1 GB or 16 GB of data. As expected, the step a fifth backup worker slightly degrades performance, be-
+times do not vary with the size of the embedding, and cause the 51st worker (i.e., the first whose result is dis-
+TensorFlow achieves step times ranging from 5 to 20 ms. carded) is more likely to be a non-straggler that generates
+                                                                more incoming traffic for the PS tasks. Figure 8 also plots
+                                                                the normalized speedup for each configuration, which we
+6.3 Image classification
+                                                                define as t(b)/t(0)×50/(50+b) (where t(b) is the median
+Deep neural networks have achieved breakthrough per- step time with b backup workers), and which discounts the
+formance on computer vision tasks such as recognizing speedup by the fraction of additional resources consumed.
+objects in photographs [42], and these tasks are a key Although adding 4 backup workers achieves the shortest
+application for TensorFlow at Google. Training a net- overall step time (1.93 s), adding 3 achieves the highest
+work to high accuracy requires a large amount of com- normalized speedup (9.5%), and hence trains the model
+putation, and we use TensorFlow to scale out the compu- to the same quality using less aggregate GPU-time.
+
+
+                                                            11
+                3000                                    (a) Training throughput                                                    1.0           (b) Asynchronous replication                                                                                                         1.0             (c) Synchronous replication
+                                                 Asynchronous
+                2500                             Synchronous
+
+
+
+
+                                                                                                    Cumulative fraction of steps
+
+
+
+
+                                                                                                                                                                                                                                                       Cumulative fraction of steps
+                                                                                                                                   0.8                                                                                                                                                0.8
+                2000
+Images/second
+
+
+
+
+                                                                                                                                   0.6                                                                                                                                                0.6
+                 1500
+                                                                                                                                   0.4                                                                                                                                                0.4
+                 1000
+                                                                                                                                                                                                                                 25 workers                                                                                               25 workers
+                                                                                                                                   0.2                                                                                           50 workers                                           0.2                                                 50 workers
+                        500                                                                                                                                                                                                      100 workers                                                                                              100 workers
+                                                                                                                                                                                                                                 200 workers                                                                                              200 workers
+                                      0                                                                                            0.0                                                                                                                                                0.0
+                                            25     50             100                       200                                          0       1                 2                    3              4                             5         6                                            0        1        2           3          4       5           6
+                                                              Number of workers                                                                                                Step time (secs)                                                                                                                   Step time (secs)
+
+
+
+
+Figure 7: (a) Inception-v3 training throughput increases with up to 200 workers. However, adding more workers gets
+diminishing returns because the step time increases for both (b) asynchronous and (c) synchronous replication.
+
+                                      2.5                                                                                                                                                                                  105
+                                                  Step time                                                                                  Speedup
+
+                                      2.4                                                                                                                  1.08
+                                                                                                                                                                                                                           104
+
+
+
+
+                                                                                                                                                                                                  Words processed/second
+                                      2.3                                                                                                                         Normalized speedup
+                Step time (seconds)
+
+
+
+
+                                                                                                                                                           1.06
+
+                                      2.2                                                                                                                                                                                  103
+                                                                                                                                                           1.04
+                                      2.1
+                                                                                                                                                                                                                                                                                                                                256 workers (sampled)
+                                                                                                                                                                                                                           102                                                                                                  256 workers (full)
+                                                                                                                                                           1.02
+                                      2.0                                                                                                                                                                                                                                                                                       32 workers (sampled)
+                                                                                                                                                                                                                                                                                                                                32 workers (full)
+                                                                                                                                                                                                                                                                                                                                4 workers (sampled)
+                                                                                                                                                                                                                                                                                                                                4 workers (full)
+                                      1.9                                                                                                                  1.00                                                            101
+                                            0                 1              2              3                         4                                5                                                                         1                 2                                            4                  8                 16                 32
+                                                                         Number of backup workers                                                                                                                                                                                           Number of parameter servers
+
+
+
+Figure 8: Backup workers reduce the step time for 50-                                                                                                                                       Figure 9: Increasing the number of PS tasks leads to in-
+worker Inception-v3 training. 4 backup workers give the                                                                                                                                     creased throughput for language model training, by par-
+shortest overall step time, but 3 backup workers are most                                                                                                                                   allelizing the softmax computation. Sampled softmax in-
+efficient when we normalize for the total resources used.                                                                                                                                   creases throughput by performing less computation.
+
+
+6.4                                             Language modeling                                                                                                                           words per second, for varying numbers of PS and worker
+                                                                                                                                                                                            tasks, and two softmax implementations. The full softmax
+Given a sequence of words, a language model predicts the                                                                                                                                    (dashed lines) multiplies each output by a 512 × 40, 000
+most probable next word [6]. Therefore, language mod-                                                                                                                                       weight matrix sharded across the PS tasks. Adding more
+els are integral to predictive text, speech recognition, and                                                                                                                                PS tasks increases the throughput, because TensorFlow
+translation applications. In this experiment, we investi-                                                                                                                                   can exploit distributed model parallelism [21, 41] and per-
+gate how TensorFlow can train a recurrent neural network                                                                                                                                    form the multiplication and gradient calculation on the PS
+(viz. LSTM-512-512 [39]) to model the text in the One                                                                                                                                       tasks, as in Project Adam [14]. Adding a second PS task
+Billion Word Benchmark [10]. The vocabulary size |V |                                                                                                                                       is more effective than increasing from 4 to 32, or 32 to
+limits the performance of training, because the final layer                                                                                                                                 256 workers. Eventually the throughput saturates, as the
+must decode the output state into probabilities for each of                                                                                                                                 LSTM calculations dominate the training step.
+|V | classes [35]. The resulting parameters can be large                                                                                                                                       The sampled softmax (solid lines) reduces the data
+(|V | × d for output state dimension d) so we use the tech-                                                                                                                                 transferred and the computation performed at the PS
+niques for handling large models from Subsection 4.2. We                                                                                                                                    tasks [35]. Instead of a dense weight matrix, it multiplies
+use a restricted vocabulary of the most common 40,000                                                                                                                                       the output by a random sparse matrix containing weights
+words—instead of the full 800,000 words [10]—in order                                                                                                                                       for the true class and a random sample of false classes.
+to experiment with smaller configurations.                                                                                                                                                  We sample 512 classes for each batch, which reduces the
+   Figure 9 shows the training throughput, measured in                                                                                                                                      softmax data transfer and computation by a factor of 78.
+
+
+                                                                                                                                                                                       12
+7    Conclusions                                              the feedback we have received both from the rest of the
+                                                              Google Brain team and the hundreds of DistBelief and
+We have described the TensorFlow system and its exten-        TensorFlow users that has helped us improve the usability
+sible dataflow-based programming model. The core idea         of functionality of the system.
+of this paper is that TensorFlow’s dataflow representation       Many individuals have contributed to TensorFlow, in-
+subsumes existing work on parameter server systems, and       cluding: John Giannandrea (for creating a supportive
+offers a uniform programming model that allows users to       research environment); Irina Kofman, Amy McDon-
+harness large-scale heterogeneous systems, both for pro-      ald Sandjideh, and Phing Turner (project management);
+duction tasks and for experimenting with new approaches.      Ashish Agarwal, Dave Andersen, Anelia Angelova, Eu-
+We have shown several examples of how the TensorFlow          gene Brevdo, Yaroslav Bulatov, Jerjou Cheng, Maciek
+programming model supports experimentation (§4) and           Chociej, Craig Citro, Greg Corrado, George Dahl, An-
+demonstrated that the resulting implementations are per-      drew Dai, Lucy Gao, mig Gerard, Ian Goodfellow,
+formant and scalable (§6).                                    Stephan Gouws, Gunhan Gulsoy, Steinar Gunderson, An-
+   Our initial experience with TensorFlow is encourag-        drew Harp, Peter Hawkins, Yangqing Jia, Rafal Joze-
+ing. A large number of groups at Google have deployed         fowicz, Łukasz Kaiser, Naveen Kumar, Geoffrey Hinton,
+TensorFlow in production, and TensorFlow is helping our       Mrinal Kalakrishnan, Anjuli Kannan, Rasmus Larsen,
+research colleagues to make new advances in machine           Yutaka Leon-Suematsu, Frank Li, Peter Liu, Xiaobing
+learning. Since we released TensorFlow as open-source         Liu, Olivia Nordquist, Chris Olah, Nishant Patil, Saurabh
+software, over 8,000 people have forked the source code       Saxena, Mike Schuster, Andrew Selle, Pierre Sermanet,
+repository, the binary distribution has been downloaded       Noam Shazeer, Jonathon Shlens, Jascha Sohl-Dickstein,
+500,000 times, and our users have published dozens of         Ilya Sutskever, Kunal Talwar, Philip Tucker, Vincent Van-
+machine learning models that use TensorFlow.                  houcke, Oriol Vinyals, Chad Whipkey, Yonghui Wu, Ke
+   TensorFlow is a work in progress. Its flexible dataflow    Yang, Zongheng Yang, and Yao Zhang (general contri-
+representation enables power users to achieve excellent       butions to the project); Shan Carter, Doug Fritz, Patrick
+performance, but we have not yet determined default poli-     Hurst, Dilip Krishnan, Dan Mané, Daniel Smilkov, Fer-
+cies that work well for most users. Further research          nanda Viégas, Martin Wattenberg, James Wexler, Jimbo
+on automatic optimization should bridge this gap. On          Wilson, Kanit Wongsuphasawat, Cassandra Xia, and the
+the system level, we are actively developing algorithms       Big Picture team (visualization); Chris Leary, Robert
+for automatic placement, kernel fusion, memory manage-        Hundt, Robert Springer, Cliff Young, and the Stream Ex-
+ment, and scheduling. While the current implementations       ecutor team (accelerator support); Norm Jouppi and the
+of mutable state and fault tolerance suffice for applica-     team that created the Tensor Processing Unit; Kayur Pa-
+tions with weak consistency requirements, we expect that      tel, Michael Piatek, and the coLab team; and the grow-
+some TensorFlow applications will require stronger con-       ing community of open-source contributors and users who
+sistency, and we are investigating how to build such poli-    have helped make TensorFlow better.
+cies at user-level. Finally, our users are demanding, and
+some have begun to chafe at the limitations of a static
+dataflow graph, especially for algorithms like deep rein-     References
+forcement learning [51]. Therefore, we face the intriguing
+problem of providing a system that transparently and effi-     [1] M. Abadi, A. Agarwal, P. Barham, E. Brevdo,
+ciently uses distributed resources, even when the structure        Z. Chen, C. Citro, G. S. Corrado, A. Davis, J. Dean,
+of the computation unfolds dynamically.                            M. Devin, S. Ghemawat, I. J. Goodfellow, A. Harp,
+   By sharing the implementation of TensorFlow and en-             G. Irving, M. Isard, Y. Jia, R. Józefowicz, L. Kaiser,
+gaging with the research community, we hope that this              M. Kudlur, J. Levenberg, D. Mane, R. Monga,
+work will spur further research in distributed systems and         S. Moore, D. G. Murray, C. Olah, M. Schus-
+machine learning.                                                  ter, J. Shlens, B. Steiner, I. Sutskever, K. Tal-
+                                                                   war, P. A. Tucker, V. Vanhoucke, V. Vasudevan,
+                                                                   F. B. Viégas, O. Vinyals, P. Warden, M. Watten-
+Acknowledgments                                                    berg, M. Wicke, Y. Yu, and X. Zheng. Tensor-
+                                                                   flow: Large-scale machine learning on heteroge-
+We gratefully acknowledge contributions from our col-              neous distributed systems. CoRR, abs/1603.04467,
+leagues within Google, and from members of the wider               2016. arxiv.org/abs/1603.04467. Software available
+machine learning community. In particular, we appreciate           from tensorflow.org.
+
+
+                                                          13
+[2] R. Al-Rfou, G. Alain, A. Almahairi, C. Anger-               Journal of Machine Learning Research, 3:1137–
+    mueller, D. Bahdanau, N. Ballas, F. Bastien,                1155, 2003. www.iro.umontreal.ca/˜lisa/pointeurs/
+    J. Bayer, A. Belikov, A. Belopolsky, Y. Bengio,             BengioDucharmeVincentJauvin jmlr.pdf.
+    A. Bergeron, J. Bergstra, V. Bisson, J. Bleecher
+    Snyder, N. Bouchard, N. Boulanger-Lewandowski, [7] T. Brants and A. Franz. Web 1T 5-gram version 1,
+    X. Bouthillier, A. de Brébisson, O. Breuleux, P.-          2006. catalog.ldc.upenn.edu/LDC2006T13.
+    L. Carrier, K. Cho, J. Chorowski, P. Christiano,
+                                                            [8] M. Burrows. The Chubby lock service for loosely-
+    T. Cooijmans, M.-A. Côté, M. Côté, A. Courville,
+                                                                coupled distributed systems. In Proceedings of
+    Y. N. Dauphin, O. Delalleau, J. Demouth, G. Des-
+                                                                the 7th Symposium on Operating Systems Design
+    jardins, S. Dieleman, L. Dinh, M. Ducoffe, V. Du-
+                                                                and Implementation, OSDI ’06, pages 335–350,
+    moulin, S. Ebrahimi Kahou, D. Erhan, Z. Fan,
+                                                                Berkeley, CA, USA, 2006. USENIX Association.
+    O. Firat, M. Germain, X. Glorot, I. Goodfellow,
+                                                                www.usenix.org/legacy/event/osdi06/tech/full pa-
+    M. Graham, C. Gulcehre, P. Hamel, I. Harlouchet,
+                                                                pers/burrows/burrows.pdf.
+    J.-P. Heng, B. Hidasi, S. Honari, A. Jain, S. Jean,
+    K. Jia, M. Korobov, V. Kulkarni, A. Lamb, P. Lam- [9] R. H. Byrd, G. M. Chin, J. Nocedal, and Y. Wu.
+    blin, E. Larsen, C. Laurent, S. Lee, S. Lefrancois,         Sample size selection in optimization methods for
+    S. Lemieux, N. Léonard, Z. Lin, J. A. Livezey,             machine learning. Mathematical Programming,
+    C. Lorenz, J. Lowin, Q. Ma, P.-A. Manzagol,                 134(1):127–155, 2012. dx.doi.org/10.1007/s10107-
+    O. Mastropietro, R. T. McGibbon, R. Memise-                 012-0572-5.
+    vic, B. van Merriënboer, V. Michalski, M. Mirza,
+    A. Orlandi, C. Pal, R. Pascanu, M. Pezeshki, [10] C. Chelba, T. Mikolov, M. Schuster, Q. Ge,
+    C. Raffel, D. Renshaw, M. Rocklin, A. Romero,               T. Brants, and P. Koehn. One billion word bench-
+    M. Roth, P. Sadowski, J. Salvatier, F. Savard,              mark for measuring progress in statistical lan-
+    J. Schlüter, J. Schulman, G. Schwartz, I. V. Serban,       guage modeling. CoRR, abs/1312.3005, 2013.
+    D. Serdyuk, S. Shabanian, E. Simon, S. Spiecker-            arxiv.org/abs/1312.3005.
+    mann, S. R. Subramanyam, J. Sygnowski, J. Tan-
+    guay, G. van Tulder, J. Turian, S. Urban, P. Vin- [11] J. Chen, R. Monga, S. Bengio, and R. Jozefowicz.
+    cent, F. Visin, H. de Vries, D. Warde-Farley,               Revisiting distributed synchronous SGD. In Inter-
+    D. J. Webb, M. Willson, K. Xu, L. Xue, L. Yao,              national Conference on Learning Representations
+    S. Zhang, and Y. Zhang. Theano: A Python frame-             Workshop Track, 2016. arxiv.org/abs/1604.00981.
+    work for fast computation of mathematical expres- [12] T. Chen, M. Li, Y. Li, M. Lin, N. Wang,
+    sions. arXiv e-prints, abs/1605.02688, May 2016.            M. Wang, T. Xiao, B. Xu, C. Zhang, and
+    arxiv.org/abs/1605.02688.                                   Z. Zhang.       MXNet: A flexible and efficient
+                                                                machine learning library for heterogeneous dis-
+[3] A. Angelova, A. Krizhevsky, and V. Vanhoucke.
+                                                                tributed systems. In Proceedings of the Workshop
+    Pedestrian detection with a large-field-of-view deep
+                                                                on Machine Learning Systems at Neural Informa-
+    network. In Robotics and Automation (ICRA), 2015
+                                                                tion Processing Systems (LearningSys), Dec. 2015.
+    IEEE International Conference on, pages 704–711.
+                                                                www.cs.cmu.edu/ muli/file/mxnet-learning-sys.pdf.
+    IEEE, 2015. CalTech PDF.
+                                                           [13] S. Chetlur, C. Woolley, P. Vandermersch, J. Cohen,
+[4] Arvind and D. E. Culler.              Annual review         J. Tran, B. Catanzaro, and E. Shelhamer. cuDNN:
+    of computer science vol. 1, 1986.              chapter      Efficient primitives for deep learning. arXiv preprint
+    Dataflow Architectures, pages 225–253. 1986.                arXiv:1410.0759, 2014. arxiv.org/abs/1410.0759.
+    www.dtic.mil/cgi-bin/GetTRDoc?Location=U2&
+    doc=GetTRDoc.pdf&AD=ADA166235.                         [14] T. Chilimbi, Y. Suzue, J. Apacible, and
+                                                                K. Kalyanaraman.          Project Adam: Building
+[5] J. Ba, V. Mnih, and K. Kavukcuoglu. Multiple ob-            an efficient and scalable deep learning train-
+    ject recognition with visual attention. arXiv preprint      ing system.         In 11th USENIX Symposium
+    arXiv:1412.7755, 2014. arxiv.org/abs/1412.7755.             on Operating Systems Design and Imple-
+                                                                mentation (OSDI 14), pages 571–582, 2014.
+[6] Y. Bengio, R. Ducharme, P. Vincent, and C. Jau-             www.usenix.org/system/files/conference/osdi14/
+    vin.      A neural probabilistic language model.            osdi14-paper-chilimbi.pdf.
+
+
+                                                         14
+[15] S. Chintala.        convnet-benchmarks,        2016. [24] J. Gonzalez-Dominguez,          I. Lopez-Moreno,
+     github.com/soumith/convnet-benchmarks.                    P. J. Moreno, and J. Gonzalez-Rodriguez.
+                                                               Frame-by-frame      language      identification  in
+[16] E. S. Chung, J. D. Davis, and J. Lee. LIN-                short utterances using deep neural networks.
+     Qits: Big data on little clients.       In Proceed-       Neural Networks, 64:49–58, 2015.                 re-
+     ings of the 40th Annual International Sympo-              search.google.com/en//pubs/archive/42929.pdf.
+     sium on Computer Architecture, ISCA ’13, pages
+     261–272, New York, NY, USA, 2013. ACM. [25] I. J. Goodfellow, J. Pouget-Abadie, M. Mirza,
+     doi.acm.org/10.1145/2485922.2485945.                      B. Xu, D. Warde-Farley, S. Ozair, A. C. Courville,
+[17] R. Collobert, S. Bengio, and J. Mariéthoz.               and Y. Bengio. Generative adversarial nets. In
+     Torch:     A modular machine learning soft-               Advances in Neural Information Processing Sys-
+     ware library.     Technical report, IDIAP, 2002.          tems 27: Annual Conference on Neural Infor-
+     infoscience.epfl.ch/record/82802/files/rr02-46.pdf.       mation Processing Systems 2014, December 8-13
+                                                               2014, Montreal, Quebec, Canada, pages 2672–
+[18] D. Crankshaw, P. Bailis, J. E. Gonzalez, H. Li,           2680, 2014. papers.nips.cc/paper/5423-generative-
+     Z. Zhang, M. J. Franklin, A. Ghodsi, and M. I.            adversarial-nets.
+     Jordan. The missing piece in complex analytics:
+     Low latency, scalable model management and serv- [26] K. He, X. Zhang, S. Ren, and J. Sun. Deep
+     ing with Velox. In CIDR 2015, Seventh Biennial            residual learning for image recognition. CoRR,
+     Conference on Innovative Data Systems Research,           abs/1512.03385, 2015. arxiv.org/abs/1512.03385.
+     Asilomar, CA, USA, January 4-7, 2015, Online Pro-
+     ceedings, 2015. arxiv.org/abs/1409.3809.             [27] G. Heigold, V. Vanhoucke, A. Senior, P. Nguyen,
+                                                               M. Ranzato, M. Devin, and J. Dean. Multilin-
+[19] H. Cui, H. Zhang, G. R. Ganger, P. B. Gib-                gual acoustic models using distributed deep neural
+     bons, and E. P. Xing. GeePS: Scalable deep                networks. In Acoustics, Speech and Signal Pro-
+     learning on distributed GPUs with a GPU-                  cessing (ICASSP), 2013 IEEE International Con-
+     specialized parameter server. In Proceedings of the       ference on, pages 8619–8623. IEEE, 2013. re-
+     Eleventh European Conference on Computer Sys-             search.google.com/pubs/archive/40807.pdf.
+     tems, EuroSys ’16, 2016. www.pdl.cmu.edu/PDL-
+     FTP/CloudComputing/GeePS-cui-eurosys16.pdf.          [28] B. Hindman, A. Konwinski, M. Zaharia, A. Gh-
+                                                               odsi, A. D. Joseph, R. Katz, S. Shenker, and I. Sto-
+[20] A. Dai, C. Olah, and Q. V. Le. Document em-               ica. Mesos: A platform for fine-grained resource
+     bedding with paragraph vectors. arXiv preprint            sharing in the data center. In Proceedings of the
+     arXiv:1507.07998, 2015. arxiv.org/abs/1507.07998.         8th USENIX Conference on Networked Systems De-
+[21] J. Dean, G. S. Corrado, R. Monga, K. Chen,                sign and Implementation, NSDI’11, pages 295–308,
+     M. Devin, Q. V. Le, M. Z. Mao, M. Ranzato, A. Se-         Berkeley, CA, USA, 2011. USENIX Association.
+     nior, P. Tucker, K. Yang, and A. Y. Ng. Large scale       www.cs.berkeley.edu/˜alig/papers/mesos.pdf.
+     distributed deep networks. In NIPS, 2012. Google     [29] G. E. Hinton. Learning distributed representa-
+     Research PDF.                                             tions of concepts. In Proceedings of the Eighth
+[22] J. Dean and S. Ghemawat. Mapreduce: Simplified            Annual Conference of the Cognitive Science So-
+     data processing on large clusters. In Proceedings         ciety, pages 1–12. Hillsdale, NJ: Erlbaum, 1986.
+     of the 6th Conference on Symposium on Opeart-             www.cogsci.ucsd.edu/˜ajyu/Teaching/Cogs202 -
+     ing Systems Design & Implementation - Volume 6,           sp13/Readings/hinton86.pdf.
+     OSDI’04, Berkeley, CA, USA, 2004. USENIX As-
+     sociation. research.google.com/archive/mapreduce- [30] G. E. Hinton, L. Deng, D. Yu, G. E. Dahl,
+     osdi04.pdf.                                            A. Mohamed, N. Jaitly, A. Senior, V. Vanhoucke,
+                                                            P. Nguyen, T. N. Sainath, and B. Kingsbury. Deep
+[23] A. Frome, G. S. Corrado, J. Shlens, S. Bengio,         neural networks for acoustic modeling in speech
+     J. Dean, T. Mikolov, et al. DeVISE: A deep visual-     recognition: The shared views of four research
+     semantic embedding model. In Advances in Neural        groups. IEEE Signal Process. Mag., 29(6):82–
+     Information Processing Systems, pages 2121–2129,       97, 2012.       www.cs.toronto.edu/˜gdahl/papers/
+     2013. research.google.com/pubs/archive/41473.pdf.      deepSpeechReviewSPM2012.pdf.
+
+
+                                                        15
+[31] P. Hunt, M. Konar, F. P. Junqueira, and B. Reed. [40] A. Karpathy, G. Toderici, S. Shetty, T. Leung,
+     ZooKeeper: Wait-free coordination for internet-          R. Sukthankar, and L. Fei-Fei. Large-scale video
+     scale systems.      In Proceedings of the 2010           classification with convolutional neural networks. In
+     USENIX Conference on USENIX Annual Techni-               Computer Vision and Pattern Recognition (CVPR),
+     cal Conference, USENIXATC’10, pages 11–11,               2014 IEEE Conference on, pages 1725–1732. IEEE,
+     Berkeley, CA, USA, 2010. USENIX Associa-                 2014. research.google.com/pubs/archive/42455.pdf.
+     tion. www.usenix.org/legacy/event/atc10/tech/full -
+     papers/Hunt.pdf.                                    [41] A. Krizhevsky. One weird trick for paralleliz-
+                                                              ing convolutional neural networks. arXiv preprint
+[32] S. Ioffe and C. Szegedy. Batch normalization: Ac-        arXiv:1404.5997, 2014. arxiv.org/abs/1404.5997.
+     celerating deep network training by reducing inter-
+     nal covariate shift. CoRR, abs/1502.03167, 2015. [42] A. Krizhevsky, I. Sutskever, and G. E. Hinton. Ima-
+     arxiv.org/abs/1502.03167.                                geNet classification with deep convolutional neural
+                                                              networks. In Advances in Neural Information Pro-
+[33] B. Jacob et al.       gemmlowp: a small self-            cessing Systems, 2012. papers.nips.cc/paper/4824-
+     contained low-precision GEMM library, 2015.              imagenet-classification-with-deep-convolutional-
+     github.com/google/gemmlowp.                              neural-networks.pdf.
+
+[34] B. Jacob, G. Guennebaud, et al. Eigen library for [43] H. Larochelle, Y. Bengio, J. Louradour, and
+     linear algebra. eigen.tuxfamily.org.                       P. Lamblin. Exploring strategies for training deep
+                                                                neural networks.       Journal of Machine Learn-
+[35] S. Jean, K. Cho, R. Memisevic, and Y. Bengio.              ing Research, 10:1–40, Jan. 2009. deeplearn-
+     On using very large target vocabulary for neural           ing.cs.cmu.edu/pdfs/1111/jmlr10 larochelle.pdf.
+     machine translation. In Proceedings of the 53rd
+     Annual Meeting of the Association for Computa- [44] A. Lavin and S. Gray. Fast algorithms for convo-
+     tional Linguistics and the 7th International Joint         lutional neural networks. CoRR, abs/1509.09308,
+     Conference on Natural Language Processing (Vol-            2015. arxiv.org/abs/1509.09308.
+     ume 1: Long Papers), pages 1–10, Beijing, China,
+     July 2015. Association for Computational Linguis- [45] Q. Le, M. Ranzato, R. Monga, M. Devin, G. Cor-
+     tics. www.aclweb.org/anthology/P15-1001.                   rado, K. Chen, J. Dean, and A. Ng. Building high-
+                                                                level features using large scale unsupervised learn-
+[36] Y. Jia, E. Shelhamer, J. Donahue, S. Karayev,              ing. In ICML’2012, 2012. Google Research PDF.
+     J. Long, R. Girshick, S. Guadarrama, and T. Dar-
+     rell. Caffe: Convolutional architecture for fast fea- [46] M. Li, D. G. Andersen, J. Park, A. J. Smola,
+     ture embedding. In Proceedings of the ACM Inter-           A. Ahmed, V. Josifovski, J. Long, E. J. Shekita,
+     national Conference on Multimedia, pages 675–678.          and B.-Y. Su. Scaling distributed machine learn-
+     ACM, 2014. arxiv.org/pdf/1408.5093.                        ing with the Parameter Server. In 11th USENIX
+                                                                Symposium on Operating Systems Design and
+[37] M. I. Jordan.       Serial order: A parallel dis-          Implementation (OSDI 14), pages 583–598, 2014.
+     tributed processing approach.           ICS report         www.usenix.org/system/files/conference/osdi14/osdi14-
+     8608, Institute for Cognitive Science, UCSD,               paper-chilimbi.pdf.
+     La Jolla, 1986. cseweb.ucsd.edu/˜gary/PAPER-
+     SUGGESTIONS/Jordan-TR-8604.pdf.                       [47] M. Li, T. Zhang, Y. Chen, and A. J. Smola.
+                                                                Efficient mini-batch training for stochastic opti-
+[38] N. Jouppi.         Google supercharges machine             mization.      In Proceedings of the 20th ACM
+     learning tasks with TPU custom chip, 2016.                 SIGKDD International Conference on Knowledge
+     cloudplatform.googleblog.com/2016/05/Google-               Discovery and Data Mining, KDD ’14, pages
+     supercharges-machine-learning-tasks-with-custom-           661–670, New York, NY, USA, 2014. ACM.
+     chip.html.                                                 www.cs.cmu.edu/˜muli/file/minibatch sgd.pdf.
+
+[39] R. Józefowicz, O. Vinyals, M. Schuster, N. Shazeer, [48] C. J. Maddison, A. Huang, I. Sutskever, and D. Sil-
+     and Y. Wu.         Exploring the limits of lan-           ver. Move evaluation in Go using deep convolutional
+     guage modeling. CoRR, abs/1602.02410, 2016.               neural networks. arXiv preprint arXiv:1412.6564,
+     arxiv.org/abs/1602.02410.                                 2014. arxiv.org/abs/1412.6564.
+
+
+                                                        16
+[49] F. McSherry, M. Isard, and D. G. Murray. Scal- [58] K. Ovtcharov, O. Ruwase, J.-Y. Kim, J. Fowers,
+     ability! But at what COST? In Proceedings             K. Strauss, and E. Chung.        Toward acceler-
+     of the 15th USENIX Conference on Hot Top-             ating deep learning at scale using specialized
+     ics in Operating Systems, HOTOS’15, Berke-            logic. In Hot Chips: A Symposium on High
+     ley, CA, USA, 2015. USENIX Association.               Performance Chips. HOTCHIPS, August 2015. re-
+     www.usenix.org/system/files/conference/hotos15/       search.microsoft.com/apps/pubs/default.aspx?id=246506.
+     hotos15-paper-mcsherry.pdf.
+                                                      [59] R. Pascanu, T. Mikolov, and Y. Bengio.         On
+[50] T. Mikolov, K. Chen, G. Corrado, and J. Dean.         the difficulty of training recurrent neural net-
+     Efficient estimation of word representations in       works.     In ICML (3), volume 28 of JMLR
+     vector space.     In International Conference on      Proceedings, pages 1310–1318. JMLR.org, 2013.
+     Learning Representations: Workshops Track, 2013.      www.jmlr.org/proceedings/papers/v28/pascanu13.pdf.
+     arxiv.org/abs/1301.3781.                              [60] K. Powell.         Nvidia devtech blog post.
+                                                                blogs.nvidia.com/blog/2015/03/17/digits-devbox/.
+[51] V. Mnih, K. Kavukcuoglu, D. Silver, A. A. Rusu,
+     J. Veness, M. G. Bellemare, A. Graves, M. Ried- [61] J. Ragan-Kelley, C. Barnes, A. Adams, S. Paris,
+     miller, A. K. Fidjeland, G. Ostrovski, S. Petersen,  F. Durand, and S. Amarasinghe.        Halide: A
+     C. Beattie, A. Sadik, I. Antonoglou, H. King, D. Ku- language and compiler for optimizing parallelism,
+     maran, D. Wierstra, S. Legg, and D. Hassabis.        locality, and recomputation in image processing
+     Human-level control through deep reinforcement       pipelines. ACM SIGPLAN Notices, 48(6):519–
+     learning. Nature, 518(7540):529–533, 02 2015.        530, 2013. people.csail.mit.edu/fredo/tmp/Halide-
+     dx.doi.org/10.1038/nature14236.                      5min.pdf.
+
+[52] P. Moritz, R. Nishihara, I. Stoica, and M. I. Jor- [62] B. Recht, C. Re, S. Wright, and F. Niu. Hogwild:
+     dan. SparkNet: Training deep networks in Spark.         A lock-free approach to parallelizing stochastic
+     In International Conference on Learning Represen-       gradient descent.     In Advances in Neural In-
+     tations, 2016. arxiv.org/abs/1511.06051.                formation Processing Systems, pages 693–701,
+                                                             2011. papers.nips.cc/paper/4390-hogwild-a-lock-
+[53] Movidius Ltd. Movidius announces Deep Learning          free-approach-to-parallelizing-stochastic-gradient-
+     Accelerator and Fathom software framework, 2016.        descent.
+     www.movidius.com/news/movidius-announces-
+     deep-learning-accelerator-and-fathom-software-     [63] C. J. Rossbach, Y. Yu, J. Currey, J.-P. Martin, and
+     framework.                                              D. Fetterly. Dandelion: a compiler and runtime
+                                                             for heterogeneous systems. In Proceedings of
+[54] D. G. Murray, F. McSherry, R. Isaacs, M. Isard,         the Twenty-Fourth ACM Symposium on Operating
+     P. Barham, and M. Abadi. Naiad: a timely dataflow       Systems Principles, pages 49–68. ACM, 2013.
+     system. In Proceedings of the Twenty-Fourth ACM         research-srv.microsoft.com/pubs/201110/sosp13-
+     Symposium on Operating Systems Principles, pages        dandelion-final.pdf.
+     439–455. ACM, 2013. Microsoft Research PDF.         [64] D. E. Rumelhart, G. E. Hinton, and R. J.
+                                                              Williams.      Learning representations by back-
+[55] A. Nair, P. Srinivasan, S. Blackwell, C. Alci-
+                                                              propagating errors. Cognitive modeling, 5:3, 1988.
+     cek, R. Fearon, A. De Maria, V. Panneershel-
+                                                              www.cs.toronto.edu/ hinton/absps/naturebp.pdf.
+     vam, M. Suleyman, C. Beattie, S. Petersen, et al.
+     Massively parallel methods for deep reinforcement [65] O. Russakovsky, J. Deng, H. Su, J. Krause,
+     learning. arXiv preprint arXiv:1507.04296, 2015.         S. Satheesh, S. Ma, Z. Huang, A. Karpa-
+     arxiv.org/abs/1507.04296.                                thy, A. Khosla, M. Bernstein, A. C. Berg,
+                                                              and L. Fei-Fei. ImageNet Large Scale Visual
+[56] Nervana       Systems.             neon,      2016.      Recognition Challenge. International Journal of
+     github.com/NervanaSystems/neon.                          Computer Vision (IJCV), 115(3):211–252, 2015.
+                                                              arxiv.org/abs/1409.0575.
+[57] NVIDIA Corporation. NCCL: Optimized primi-
+     tives for collective multi-gpu communication, 2016. [66] A. Smola and S. Narayanamurthy.            An ar-
+     github.com/NVIDIA/nccl.                                  chitecture for parallel topic models.        Proc.
+
+                                                      17
+     VLDB Endow., 3(1-2):703–710, Sept. 2010.                   www.usenix.org/legacy/event/osdi08/tech/full pa-
+     vldb.org/pvldb/vldb2010/papers/R63.pdf.                    pers/yu y/yu y.pdf.
+
+[67] I. Sutskever, J. Martens, G. E. Dahl, and G. E. [75] M. Zaharia, M. Chowdhury, T. Das, A. Dave,
+     Hinton. On the importance of initialization and      J. Ma, M. McCauley, M. J. Franklin, S. Shenker,
+     momentum in deep learning.         In Proceedings    and I. Stoica. Resilient distributed datasets: A
+     of the 30th International Conference on Machine      fault-tolerant abstraction for in-memory cluster
+     Learning (ICML-13), pages 1139–1147. JMLR            computing. In Proceedings of the 9th USENIX
+     Workshop and Conference Proceedings, 2013.           conference on Networked Systems Design and
+     jmlr.org/proceedings/papers/v28/sutskever13.pdf.     Implementation. USENIX Association, 2012.
+                                                          www.usenix.org/system/files/conference/nsdi12/nsdi12-
+[68] I. Sutskever, O. Vinyals, and Q. V. Le. Sequence     final138.pdf.
+     to sequence learning with neural networks. In
+     NIPS, 2014. papers.nips.cc/paper/5346-sequence- [76] M. D. Zeiler, M. Ranzato, R. Monga, M. Mao,
+     to-sequence-learning-with-neural.                    K. Yang, Q. Le, P. Nguyen, A. Senior, V. Van-
+                                                          houcke, J. Dean, and G. E. Hinton. On rectified lin-
+[69] C. Szegedy, W. Liu, Y. Jia, P. Sermanet, S. Reed,    ear units for speech processing. In ICASSP, 2013.
+     D. Anguelov, D. Erhan, V. Vanhoucke, and A. Ra-      research.google.com/pubs/archive/40811.pdf.
+     binovich. Going deeper with convolutions. In
+     CVPR’2015, 2015. arxiv.org/abs/1409.4842.
+
+[70] C. Szegedy, V. Vanhoucke, S. Ioffe, J. Shlens, and
+     Z. Wojna. Rethinking the inception architecture
+     for computer vision. CoRR, abs/1512.00567, 2015.
+     arxiv.org/abs/1512.00567.
+
+[71] C. tao Chu, S. K. Kim, Y. an Lin, Y. Yu, G. Bradski,
+     K. Olukotun, and A. Y. Ng. Map-reduce for ma-
+     chine learning on multicore. In B. Schölkopf, J. C.
+     Platt, and T. Hoffman, editors, Advances in Neural
+     Information Processing Systems 19, pages 281–288.
+     MIT Press, 2007. papers.nips.cc/paper/3150-map-
+     reduce-for-machine-learning-on-multicore.pdf.
+
+[72] A. Verma, L. Pedrosa, M. Korupolu, D. Oppen-
+     heimer, E. Tune, and J. Wilkes. Large-scale clus-
+     ter management at Google with Borg. In Pro-
+     ceedings of the Tenth European Conference on
+     Computer Systems, page 18. ACM, 2015. re-
+     search.google.com/pubs/archive/43438.pdf.
+
+[73] O. Vinyals, L. Kaiser, T. Koo, S. Petrov, I. Sutskever,
+     and G. Hinton.        Grammar as a foreign lan-
+     guage. Technical report, arXiv:1412.7449, 2014.
+     arxiv.org/abs/1412.7449.
+
+[74] Y. Yu, M. Isard, D. Fetterly, M. Budiu, U. Erlings-
+     son, P. K. Gunda, and J. Currey. DryadLINQ:
+     A system for general-purpose distributed data-
+     parallel computing using a high-level lan-
+     guage.     In Proceedings of the 8th USENIX
+     Conference on Operating Systems Design and
+     Implementation, OSDI’08, pages 1–14, Berke-
+     ley, CA, USA, 2008. USENIX Association.
+
+
+                                                           18
+
