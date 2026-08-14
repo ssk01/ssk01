@@ -24,10 +24,14 @@ namespace lf {
 //   calib: 非静态输入 (激活) 的量化范围 —— 对应 TF 早期"用户提供 min/max",
 //          由校准数据统计得到 (跑一遍数据看激活范围)
 // ============================================================
+// wrange (可选, QAT 用): 权重烘焙范围 —— 键是 matmul 的权重输入节点 (可能是
+// FAKE_QUANT), 值是训练时冻结的范围。QAT 的模型是按训练范围训出来的, 导出时
+// 沿用该范围 (值域统计的 tensor_minmax 只是兜底)。
 inline void quantize_inference(
     Graph& g,
     const std::unordered_map<const Node*, Tensor>& vars,
-    const std::unordered_map<const Node*, std::pair<float, float>>& calib) {
+    const std::unordered_map<const Node*, std::pair<float, float>>& calib,
+    const std::unordered_map<const Node*, std::pair<float, float>>& wrange = {}) {
     // 先收集 matmul (遍历中改图会失效)
     std::vector<Node*> matmuls;
     for (const auto& un : g.nodes())
@@ -39,9 +43,19 @@ inline void quantize_inference(
         Node* w = mm->inputs[1];  // 权重 (变量/常量, 静态值 → 烘焙)
 
         // 1. 权重: 静态值直接量化成 int8 常量 (范围从值本身统计)
-        const Tensor& wvals = (w->type == VARIABLE) ? vars.at(w) : w->init;
+        //    QAT 图里权重是 fake_quant(variable) → 变量值 (fake_quant 前向是往返,
+        //    值不变语义, 直接取原值)
+        Node* wvar = w;
+        if (w->type == FAKE_QUANT) wvar = w->inputs[0];
+        const Tensor& wvals = (wvar->type == VARIABLE) ? vars.at(wvar) : wvar->init;
         auto [wmin, wmax] = tensor_minmax(wvals);
         nudge_range(wmin, wmax);
+        if (auto it = wrange.find(w); it != wrange.end()) {
+            // QAT: 用训练时冻结的范围 (模型按这个范围训出来的, 见 demo 6)
+            wmin = it->second.first;
+            wmax = it->second.second;
+            nudge_range(wmin, wmax);
+        }
         Node* cw = g.constant(w->name + "_q", quantize_tensor(wvals, wmin, wmax));
         cw->qmin = wmin;
         cw->qmax = wmax;
@@ -70,7 +84,11 @@ inline void quantize_inference(
                 if (in == mm) in = dq;
         }
         g.remove_node(mm);
-        if (w->type == VARIABLE) dead_weights.insert(w);
+        // QAT: 权重链是 variable → fake_quant → matmul, 两个节点都可能变孤儿
+        if (wvar->type == VARIABLE) {
+            dead_weights.insert(wvar);
+            if (w != wvar) dead_weights.insert(w);
+        }
     }
 
     // 权重已烘焙进常量、不再被消费 → 删掉 (对应量化部署的 freeze: 图里只剩

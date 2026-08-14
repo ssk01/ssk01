@@ -80,6 +80,12 @@ public:
                 add_contrib(n->inputs[0], g_.matmul_grad_a(g, n->inputs[1]));
                 add_contrib(n->inputs[1], g_.matmul_grad_b(g, n->inputs[0]));
                 break;
+            case FAKE_QUANT:
+                // STE (straight-through estimator): 舍入的梯度近似为恒等 —— 梯度
+                // 原样传给输入, [min,max] 外的截断由 FAKE_QUANT_GRAD kernel 做
+                // (对应 TF gradients.py 给 FakeQuant 注册的假量化梯度)
+                add_contrib(n->inputs[0], g_.fake_quant_grad(g, n->inputs[0], n));
+                break;
             default:
                 break;  // PLACEHOLDER/VARIABLE/CONST/SGD_STEP/梯度 kernel: 无反向路径
             }

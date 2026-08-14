@@ -5,7 +5,9 @@ min/max 属性式量化: QuantizeV2 按 MIN_COMBINED 公式 q = round((clamp(x)-
 (2026-08-13)
 
 ### Q: 这个量化是导出时候的量化吗? (PTQ vs QAT)
-是——v6 demo 是**部署/导出时的后训练量化 (PTQ)**: 训练完的模型才做图变换, 权重冻结成 int8 常量、激活范围由校准提供, 对应 2016 年形态。QAT (量化感知训练, 训练图里插 fake-quant 节点, 前向模拟舍入误差让模型学会抵抗量化) 是后来的事: FakeQuant ops 2016-10-24 加入 ("Add FakeQuant ops and kernels for use with quantized training"), 2017 年 Jacob et al. 论文《Quantization and Training of NNs for Efficient Integer-Arithmetic-Only Inference》定型, 2018 年 tf.contrib.quantize 工具化。单层模型误差不累积 (一次量化往返 mean 误差 ~0.017), PTQ 已够 (AUC 0.8807→0.8805 掉 0.0002); 深层网络误差逐层放大才需要 QAT。工业界流程: 先 PTQ, 掉点超阈值再上 QAT (要重训, 成本高)。
+是——v6 demo 5 是**部署/导出时的后训练量化 (PTQ)**: 训练完的模型才做图变换, 权重冻结成 int8 常量、激活范围由校准提供, 对应 2016 年形态。QAT (量化感知训练, 训练图里插 fake-quant 节点, 前向模拟舍入误差让模型学会抵抗量化) 是后来的事: FakeQuant ops 2016-10-24 加入 ("Add FakeQuant ops and kernels for use with quantized training"), 2017 年 Jacob et al. 论文《Quantization and Training of NNs for Efficient Integer-Arithmetic-Only Inference》定型, 2018 年 tf.contrib.quantize 工具化。工业界流程: 先 PTQ, 掉点超阈值再上 QAT (要重训, 成本高)。
+**实现版 (demo 6, 用户要求后补做)**: 三个部件——① fake quant 前向 = 量化-反量化往返 (float 里走 int8 网格), 与部署同式 → 训练见到的误差 = 部署误差; ② STE 梯度 (FakeQuantWithMinMaxVarsGradient): 舍入不可导近似恒等, [min,max] 内梯度直通、越界截 0; 激活侧梯度是 [N] 对 [N,F] 的逐行掩码广播, 权重侧 [F] 逐元素; ③ 范围训练中更新 (running min/max 简化 vs TF 的 EMA decay≈0.999), 只改节点字段不触发重编译, FAKE_QUANT_GRAD 从 fake_quant 节点现场读范围 (对应 TF 的 min/max 张量输入——否则训练中改范围梯度掩码会过期)。导出直接喂 quantize_inference: 权重链 variable→fake_quant→matmul 烘焙成 int8 常量且**沿用训练冻结范围** (新增 wrange 参数); 激活 quantize 吃 fake_quant 输出, 往返值就在 int8 网格上 → 二次量化恒等 (quantize(roundtrip(x))==quantize(x), fp32 精度内精确), 图变换零改动。
+**实测 (同一份数据 seed 7 直比)**: QAT 量化掉点 0.000133 vs PTQ 0.000247 (砍半); 部署 AUC 0.880576 vs PTQ 部署 0.880486; 代价是训练带量化噪声, QAT 模型纯 fp32 能力 0.880709 比 PTQ 训练的 0.880733 略低——赚的是"量化后"的账。**fake-quant 训练模拟 vs int8 导出 logits 差 max=0.042/mean=0.011**: 缝来自 2016 MIN_COMBINED 双重舍入 (量化/反量化用 min/max, matmul offset 用 round(min·s) 单独舍入, 两网格不完全重合); 2017 affine 方案 (单一 scale/zero_point) 没这个缝, 训练模拟与部署逐位一致。单层结论: QAT 收益 ~0.0001 AUC 无关痛痒, 机制完整成立, 深层网络误差逐层放大才是 QAT 战场。
 (2026-08-14)
 
 ### Q: 用户直觉版量化 (norm×256) 与 scale/level/zero_point 版本差别在哪?

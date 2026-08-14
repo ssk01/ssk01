@@ -90,6 +90,43 @@ inline void forward(Node* node, RunState& st) {
         st.out(node) = out;
         break;
     }
+    case FAKE_QUANT: {
+        // FakeQuantWithMinMaxArgs (2016-10-24): 前向 = 量化-反量化往返, 全程 float
+        // 里走完 int8 网格。部署时的 dequantize(quantize(x)) 与它同式 —— 训练时
+        // 模型见到的舍入误差就是部署时的误差 (QAT 的核心)。
+        Node* in = node->inputs[0];
+        const Tensor& x = st.out(in);
+        Tensor out(x.shape);
+        for (int i = 0; i < x.size(); i++)
+            out.data[i] = dequantize_one_i8(
+                quantize_one(x.data[i], node->qmin, node->qmax), node->qmin, node->qmax);
+        st.out(node) = out;
+        break;
+    }
+    case FAKE_QUANT_GRAD: {
+        // STE (straight-through estimator) —— 对应 FakeQuantWithMinMaxVarsGradient:
+        // 舍入不可导, 近似为恒等: 落在 [min,max] 内的输入梯度直通, 越界截成 0。
+        // 范围从第 3 个输入 (fake_quant 节点) 现场读 → 训练中更新范围即时生效。
+        // 梯度可能是 [N] (matmul 对 A 的梯度) 而 x 是 [N,F] → 逐行广播掩码。
+        Node* g = node->inputs[0];
+        Node* x = node->inputs[1];
+        const Node* fq = node->inputs[2];
+        const Tensor& gv = st.out(g);
+        const Tensor& xv = st.out(x);
+        Tensor out(xv.shape);
+        auto mask = [&](int i) {
+            return (xv.data[i] >= fq->qmin && xv.data[i] <= fq->qmax) ? gv.data[i] : 0.0f;
+        };
+        if (gv.size() == xv.size()) {
+            for (int i = 0; i < xv.size(); i++) out.data[i] = mask(i);
+        } else {
+            int N = xv.shape[0], F = xv.size() / N;
+            for (int n = 0; n < N; n++)
+                for (int f = 0; f < F; f++) out.data[n * F + f] = mask(n * F + f);
+        }
+        st.out(node) = out;
+        break;
+    }
     }
 }
 
