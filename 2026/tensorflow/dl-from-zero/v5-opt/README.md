@@ -64,24 +64,59 @@ make && ./build/train
 ## 结果
 
 ```
-demo 1  CSE:       y = sigmoid(x) + sigmoid(x)        4 → 3 节点, 值一致
-demo 2  常量折叠:  y = x + 2*3                        5 → 3 (mul 原地折叠, 孤儿 2/3 被清)
-                   y = x + mean(square(2))            5 → 3 (整条链折叠 + 折叠产物被第二轮 CSE 去重)
-demo 4  负例:      两个相同的 sgd_step 不被合并        v = 0.6 (合并了会变 0.8, 梯度应用两次)
-demo 3  三 pass 串联: 训练图(前向 + 重复监控指标 + 梯度子图 + sgd)
-                   25 → 22 (CSE 合并重复的 mean(square(diff)) 监控链)
-                   → prune 到推理图: 5 节点
-                   训练收敛 a=1.97 b=2.99, 8 线程并发推理不变
+== demo 1: CSE 合并重复子表达式 ==
+  before 1st run: 4 nodes
+  after  1st run (CSE merged sigmoid): 3 nodes
+  values == direct 2*sigmoid(x): yes
+
+== demo 2: 常量折叠 ==
+  2a before 1st run: 5 nodes
+  2a after  1st run (2*3 folded): 3 nodes
+   values == x+6: yes
+  2b before 1st run: 5 nodes
+  2b after  1st run (chain folded + CSE dedup): 3 nodes
+   values == x+4: yes
+
+== demo 4: 负例 —— 有状态节点不合并 ==
+  graph before 1st run: 4 nodes
+  after 1st run (sgd kept as 2 nodes): 4 nodes
+  v = 0.6  (expect 0.6: 两个 sgd 各应用一次, 未合并)
+
+== demo 3: prune + CSE + 常量折叠 串联 ==
+  full graph (forward + dup monitor + grad + sgd): 25 nodes
+  after 1st run (auto optimize: dup monitor merged): 22 nodes
+  epoch 0: loss=20.9918
+  epoch 40: loss=2.1121
+  epoch 80: loss=0.600487
+  epoch 120: loss=0.283229
+  epoch 160: loss=0.21664
+  epoch 199: loss=0.202812
+  trained: a=1.97173  b=2.99197
+  after prune{y_pred} (inference graph): 5 nodes
+
+  concurrent inference: 8 threads x 5000 runs on the same graph:
+    thread 0  x=-4  mean_abs_err=0.105062
+    thread 1  x=-3  mean_abs_err=0.0767891
+    thread 2  x=-2  mean_abs_err=0.0485153
+    thread 3  x=-1  mean_abs_err=0.0202416
+    thread 4  x=0  mean_abs_err=0.00803208
+    thread 5  x=1  mean_abs_err=0.0363059
+    thread 6  x=2  mean_abs_err=0.0645795
+    thread 7  x=3  mean_abs_err=0.0928535
 ```
+
+解读: demo 1/2 验证代数变换前后值一致; demo 4 验证 is_stateful 守卫(合并了会变 0.8); demo 3 串起完整生命周期——25 节点训练图一次 run 自动优化到 22(CSE 合并重复监控链),200 轮训练收敛 a≈1.97 b≈2.99,prune 后推理图只剩 5 节点,8 线程并发推理结果与手算一致。
 
 ## 与 TF 的对应
 
 | 我们 | TF |
 |---|---|
-| `graph/optimize.h` `cse()` | `tensorflow/core/graph/optimizer_cse.cc` `OptimizeCSE`(初始 commit 实有) |
+| `graph/optimize.h` `cse()` | `tensorflow/core/graph/optimizer_cse.cc` `OptimizeCSE`(初始 commit f41959ccb 实有, 但当时**未接入任何执行路径**, 只有单测) |
 | 哈希 (type, 输入, scalar, CONST 值) | `NodeHash`(type + 输出类型 + 输入 + attrs) |
 | `equivalent()` 过滤规则 | `Equivalent()`: is_stateful / HasRefInput / attrs / 输入 / 控制边 |
 | ADD/MUL 交换律规范化 | `FillInputs` 的 commutative sort |
-| `const_fold()` 用运行时 forward 求值 + 原地转 CONST | `constant_folding.cc`: 常量子图拷出去用本地 executor 跑, `ReplaceNodeWithConstant` 换节点 |
-| Session run 前 pass pipeline | 论文 §5 master 的 CSE + 常量折叠优化阶段 |
+| `const_fold()` 用运行时 forward 求值 + 原地转 CONST | `constant_folding.cc`: 常量子图拷出去用本地 executor 跑, `ReplaceNodeWithConstant` 换节点(2016-01-25 加入, 71184628) |
+| Session run 前 pass pipeline | 2016 年底 `common_runtime/graph_optimizer.cc`: `GraphOptimizer::Optimize` 先折叠后 CSE, 由 direct_session 调用; 论文 §5 master 的优化阶段即此 |
 | Graph `generation` 缓存失效 | executor 缓存 + 图版本化 |
+
+**历史考证**: 首个 commit(2015-11-07)里唯一的"优化"其实是 `subgraph.cc` 的 `RewriteGraphForExecution`——按 fetch/target 只跑图的一部分(v1-prune 的源头), CSE 写好了但没接线; 常量折叠 2016-01-25 才出现; "Session run 前自动跑 CSE+折叠"要到 2016 年底 GraphOptimizer 才算成型。
