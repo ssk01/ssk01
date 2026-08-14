@@ -32,6 +32,9 @@ enum NodeType {
     QUANTIZE,       // inputs=[x]: min/max 量化到 int8, qmin/qmax = 输出范围
     Q_MATMUL,       // inputs=[a,b] (int8): int32 累加矩阵乘, qmin/qmax = 输出范围
     DEQUANTIZE,     // inputs=[q]: 反量化回 float, qmin/qmax = 输入范围
+    // ---- QAT ops (对应 TF 2016-10-24 加入的 FakeQuant) ----
+    FAKE_QUANT,     // inputs=[x]: 量化-反量化往返 (float 里走 int8 网格), qmin/qmax = 训练范围
+    FAKE_QUANT_GRAD,// inputs=[grad, x, fq]: STE —— [min,max] 内梯度直通, 越界截 0
 };
 
 // 纯静态的图节点: 只描述"算什么", 不存运行值 (对应 TF 的 Graph Node)
@@ -127,6 +130,25 @@ public:
         n->qmin = q->qmin;
         n->qmax = q->qmax;
         return n;
+    }
+
+    // ---- QAT ops (对应 TF 2016-10-24 加入的 FakeQuantWithMinMaxArgs) ----
+    // 假量化: 前向 = 量化-反量化往返 (模拟部署时 int8 的舍入, 见 kernels 的
+    // FAKE_QUANT case)。范围在训练中更新 —— 和 QUANTIZE 一样存在节点字段上
+    // (TF 的 FakeQuantWithMinMaxVars 把 min/max 做成运行时输入张量由 EMA 更新,
+    // 我们的简化见 README 诚实标注)。
+    Node* fake_quant(Node* x, float min, float max) {
+        Node* n = make(FAKE_QUANT, "fake_quant", {x});
+        n->qmin = min;
+        n->qmax = max;
+        return n;
+    }
+
+    // FAKE_QUANT 的梯度 (build_gradients 生成): STE 掩码需要 x 的运行时值 + 实时
+    // 范围, 所以第 3 个输入直接引用 fake_quant 节点 —— 训练中改它的 qmin/qmax
+    // 即时生效 (对应 TF FakeQuantWithMinMaxVarsGradient 的 min/max 张量输入)
+    Node* fake_quant_grad(Node* grad, Node* x, Node* fq) {
+        return make(FAKE_QUANT_GRAD, "fake_quant_grad", {grad, x, fq});
     }
 
     const std::vector<std::unique_ptr<Node>>& nodes() const { return nodes_; }

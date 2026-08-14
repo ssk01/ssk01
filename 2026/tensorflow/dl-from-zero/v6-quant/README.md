@@ -23,7 +23,7 @@ Dequantize:      int32/int8 → float       x = (c + 2^31) * (max-min)/(2^32-1) 
 2. 首个量化 commit 里的 gemmlowp 快路径被 `if (false && ...)` 禁用——**当时实际执行的是 ReferenceGemm**(朴素 int32 累加)。正确性优先, 加速是后来的事。
 3. 2016 的量化是 **min/max 属性式**(范围由用户/校准提供), 不是 2017 年 integer-arithmetic-only 论文的 affine scale/zero-point 方案; 但 QuantizedMatMul 的 offset 就是 zero-point 的雏形(数值 0 对应的 int8 档位)。
 4. 我们的容器简化: int8/int32 值用 float Tensor 装整数, 不引入真实类型系统——值域与算术和 TF 完全一致, 但 TF 有 qint8/qint32 真实类型 + kernel 注册。
-5. **本 demo 是"导出/部署时的后训练量化 (PTQ)"**: 训练完的模型才做图变换, 权重冻结成常量、激活范围来自校准——对应 2016 年形态。**量化感知训练 (QAT, 训练图里插 fake-quant 节点让模型学会抵抗舍入) 是后来的事**: FakeQuant ops 2016-10-24 才加入, 2017 年 Jacob et al. 论文定型, 2018 年 `tf.contrib.quantize` 工具化。单层模型误差不累积, PTQ 已够 (AUC 掉 0.0002); 深层网络误差逐层放大, 才需要 QAT。工业界常规流程: 先 PTQ, 掉点超阈值再上 QAT。
+5. **demo 5 是"导出/部署时的后训练量化 (PTQ)"**: 训练完的模型才做图变换, 权重冻结成常量、激活范围来自校准——对应 2016 年形态。**量化感知训练 (QAT, 训练图里插 fake-quant 节点让模型学会抵抗舍入) 是后来的事**: FakeQuant ops 2016-10-24 才加入, 2017 年 Jacob et al. 论文定型, 2018 年 `tf.contrib.quantize` 工具化 —— **demo 6 实现了 QAT** (见下文)。工业界常规流程: 先 PTQ, 掉点超阈值再上 QAT (要重训, 成本高)。
 6. **量化范围我们存节点字段 (`qmin/qmax`), TF 不是这么存的**: 2016 的 QuantizeV2/QuantizedMatMul 把 min/max 作为**运行时输入张量**(`quantize_op.cc` 里 `ctx->input(1)/(2)`), 范围在图上作为数据流传递, 可由校准 op 动态算出; 通用元数据走 `NodeDef.attr`(`map<string, AttrValue>`), 每种 op 注册时声明自己要哪些 attr, kernel 按名字取——**Node 结构体不随 attr 数量膨胀**。我们平铺两个 float 是 demo 规模下的简化(与 v5 的 `scalar` 同属一类)。
 7. **`quantized_matmul` 只有 2 层循环**: 权重是向量, 本 demo 的 matmul 是 matrix-vector(`x[N,F] × w[F]`), 收缩维 f 就是内层循环; TF 的 QuantizedMatMul/ReferenceGemm 是完整 `[M,K]×[K,N]` 矩阵乘 (3 层循环), 多层/多分类时第三层循环才回来。
 
@@ -101,13 +101,78 @@ demo 级差异: 只量化 matmul 一层, bias 保持 fp32(2016 的 `quantized_bi
 
 **与 v5 的联动**: 量化图变换后再次 run, 自动优化(CSE/常量折叠)照常运行——CSE 的哈希/等价判定加入了 `qmin/qmax`, 两个范围不同的 Quantize 节点不会误合并, 相同的会被合并(同一个激活喂两个 matmul 时)。
 
+## QAT —— 量化感知训练(demo 6, 对应 FakeQuant ops)
+
+**PTQ 的问题**: 量化误差是训练完才"空降"的——模型从没见过自己的 int8 形态, 只能祈祷误差在阈值附近不害人。单层误差不累积没事 (demo 5 掉 0.0002), 深层网络误差逐层放大, 才需要让模型**在训练时就看见自己的部署形态**: 训练图里插 fake-quant 节点, 前向走量化-反量化往返, 梯度用 STE 直通——权重被优化得"天生抗量化"。
+
+### 机制(三个部件)
+
+```
+① fake quant 前向 (FakeQuantWithMinMaxArgs):
+   out = dequantize( quantize(x) )         ← 全程 float, 但中间值走 int8 网格
+   与部署时 dequantize(quantize(x)) 同式 → 训练见到的误差 = 部署误差
+
+② STE 梯度 (straight-through estimator, FakeQuantWithMinMaxVarsGradient):
+   ∂L/∂x = grad · (x ∈ [min,max] ? 1 : 0)
+   舍入不可导 → 近似为恒等; [min,max] 外截断 (clamp 也不可导, 截掉梯度)
+
+③ 范围更新 (对应 TF 对 min/max 的 EMA, decay≈0.999; 我们 running min/max 简化):
+   每轮按观测扩展 x/w 的范围, 只改节点字段, 不触发图重编译;
+   FAKE_QUANT_GRAD 从 fake_quant 节点**现场读范围** (对应 TF 的 min/max 张量输入)
+```
+
+训练图: `logit = matmul(fake_quant(x), fake_quant(w)) + b`, bias 保持 fp32 (与 demo 5 一致)。fake_quant 的梯度有两条腿: 激活侧梯度是 [N] 对 [N,F] 的逐行掩码广播, 权重侧是 [F] 等尺寸逐元素——对应 matmul 两个输入的梯度形状。
+
+### 导出(QAT 图直接喂 quantize_inference)
+
+```
+variable → fake_quant → matmul   →   variable → fake_quant → const_int8(w, 训练范围) → Q_MatMul
+```
+
+- 权重链 `variable → fake_quant → matmul` 被烘焙成 int8 常量, 范围**沿用训练冻结值** (`quantize_inference` 新增 `wrange` 参数)——模型是按这个范围训出来的, 导出别换范围
+- 激活侧 quantize 吃 **fake_quant 的输出**, 而往返后的值就在 int8 网格上 → 二次量化是**恒等** (quantize(roundtrip(x)) == quantize(x), fp32 精度内精确成立): 不引入额外误差, 图变换无需特殊处理
+- 推理图 8 nodes (多两个 fake_quant), 量化图 9 nodes (fake_quant 留在执行路径上当 quantize 的输入)
+
+### demo 6 结果(与 demo 5 同一份数据, seed 7)
+
+```
+== demo 6: QAT 量化感知训练 (fake quant + STE) ==
+  训练完成: loss=0.440516                (demo 5 PTQ: 0.440387 —— 训练带量化噪声, 略高)
+  训练范围: x ∈ [-4.47008, 4.02585]  w ∈ [-0.598151, 0.677068]
+  推理图: 8 nodes
+  量化图: 9 nodes
+  fp32(真实权重): AUC=0.880709  acc=0.805
+  QAT fake-quant: AUC=0.880631  acc=0.804
+  QAT int8 导出:  AUC=0.880576  acc=0.8045
+  fake-quant vs int8 logits 差: max=0.0424267  mean=0.011342
+  对照 demo 5 (PTQ): AUC 0.880733 → 0.880486 (掉 0.000246933)
+  本 demo  (QAT): AUC 0.880709 → 0.880576 (掉 0.0001332)
+```
+
+解读(诚实版):
+- **QAT 把量化掉点砍半**: 0.000133 vs PTQ 的 0.000247; 部署 AUC 0.880576 vs PTQ 部署 0.880486。单层模型误差不累积, 这 ~0.0001 的差就是 QAT 的全部收益——**数值上无关痛痒, 机制上完整成立** (深层网络误差逐层放大, 收益成比例放大, 这才是 QAT 的战场)
+- **代价**: fake quant 噪声也让训练略难——QAT 模型的纯 fp32 能力 0.880709 比 PTQ 训练的 0.880733 低一点点; 赚的是"量化后"的账
+- **fake-quant vs int8 导出 logits 差 max=0.042 / mean=0.011**: 训练模拟 ≠ 部署的缝来自 2016 MIN_COMBINED 的**双重舍入**——量化/反量化用 min/max (`(q+128)·level+min`), matmul 的 offset 用 `round(min·s)` 单独舍入, 两个整数网格不完全重合 (0.5 档 × 另一侧的值, 逐项 ~0.02 的随机游走)。2017 年 affine 方案 (scale/zero_point 单一定义) 没有这个缝, 训练模拟和部署逐位一致
+- **范围演化**: x 全批喂入 → 首轮观测即定死; w 从 0 长到 w_star, 范围 [0, 0.01] → [-0.60, 0.68] 真实逐轮扩展——这就是"范围跟着权重一起训"的机制
+
+### 与 TF 的对应
+
+| 我们 | TF |
+|---|---|
+| `FAKE_QUANT` (前向往返) | `FakeQuantWithMinMaxArgs` (2016-10-24 加入; attrs 版范围写死) |
+| `FAKE_QUANT_GRAD` (STE 掩码) | `FakeQuantWithMinMaxVarsGradient` (min/max 是**运行时张量输入**, 我们简化成从 fake_quant 节点现场读) |
+| 训练中更新范围 (running min/max) | TF 对 FakeQuantWithMinMaxVars 的 min/max 做 ExponentialMovingAverage (decay≈0.999) |
+| 训练图插 fake quant (手写) | 2018 年 `tf.contrib.quantize` (quantize_graph 的 QAT 模式, 自动插到 conv/matmul 前后) |
+| 导出沿用训练范围 (`wrange` 参数) | tf.contrib.quantize 导出时把 FakeQuant 的 min/max 变量冻结成常量 |
+| STE 梯度建在梯度子图里 | gradients.py 给 FakeQuant 注册的梯度函数 |
+
 ## 运行
 
 ```bash
 make && ./build/train
 ```
 
-## 结果(demo 5, 其余为 v5 回归)
+## 结果(demo 5 的 PTQ; demo 6 的 QAT 结果见上文 QAT 一节)
 
 ```
 训练完成: loss=0.440387                    (F=16 特征 logistic 回归, CTR 预估最小形态)
@@ -141,6 +206,7 @@ logits 误差: max=0.226  mean=0.017
 | `quantize_inference` 图变换 pass | 2016 手工拼图 → 2016-06 `quantize_graph.py` eightbit 模式自动做 |
 | 校准提供激活 min/max | TF 早期用户提供范围, 自动校准后来才出现 |
 | int8 值用 float 容器装 | 类型系统简化; TF 用 qint8/qint32 真实类型 |
+| `FAKE_QUANT` + STE 梯度 (demo 6) | `FakeQuantWithMinMaxArgs/Vars` ops (2016-10-24) + `tf.contrib.quantize` (2018), 见上文 QAT 一节 |
 
 ## 今天价值(2026, 为什么这个 feature 现在还有意义)
 

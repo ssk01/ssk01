@@ -18,6 +18,9 @@ static void print_count(const char* label, const Graph& g) {
     std::cout << "  " << label << ": " << g.nodes().size() << " nodes" << std::endl;
 }
 
+// demo 5 (PTQ) 的 AUC, demo 6 (QAT) 末尾做同数据对照
+static double demo5_fp32_auc = 0, demo5_i8_auc = 0;
+
 // 两张图逐值一致?
 static bool allclose(const Tensor& a, const Tensor& b, float eps = 1e-5f) {
     if (a.size() != b.size()) return false;
@@ -317,12 +320,177 @@ int main() {
             max_err = std::max(max_err, e);
             mean_err_sum += e;
         }
-        std::cout << "  fp32: AUC=" << auc(logits_fp32) << "  acc="
+        demo5_fp32_auc = auc(logits_fp32);
+        demo5_i8_auc = auc(logits_i8);
+        std::cout << "  fp32: AUC=" << demo5_fp32_auc << "  acc="
                   << acc(logits_fp32) << std::endl;
-        std::cout << "  int8: AUC=" << auc(logits_i8) << "  acc="
+        std::cout << "  int8: AUC=" << demo5_i8_auc << "  acc="
                   << acc(logits_i8) << std::endl;
         std::cout << "  logits 误差: max=" << max_err << "  mean="
                   << mean_err_sum / N_test << std::endl;
+    }
+
+    // ============================================================
+    // demo 6: QAT —— 量化感知训练 (训练图里插 fake quant)
+    //   对应 TF 2016-10-24 加入的 FakeQuant ops + 2018 年 tf.contrib.quantize
+    //   的自动化插入。demo 5 (PTQ) 训练完才量化, 误差是事后强加的; QAT 训练时
+    //   前向就走量化-反量化往返 (模型"看见"自己的部署形态), 梯度用 STE 直通
+    //   (straight-through estimator, 舍入不可导 → 近似为恒等) —— 权重被优化得
+    //   "天生抗量化"。数据与 demo 5 完全相同 (同一 rng seed) → 数字可直接对照。
+    // ============================================================
+    std::cout << "\n== demo 6: QAT 量化感知训练 (fake quant + STE) ==" << std::endl;
+    {
+        const int F = 16, N_train = 4000, N_test = 2000, epochs = 40;
+        std::mt19937 rng(7);  // 与 demo 5 同一 seed → 同一份数据
+        std::normal_distribution<float> gauss(0.0f, 1.0f);
+        std::uniform_real_distribution<float> wdist(-1.0f, 1.0f);
+        std::uniform_real_distribution<float> prob(0.0f, 1.0f);
+        std::vector<float> w_star(F);
+        for (int f = 0; f < F; f++) w_star[f] = wdist(rng);
+        const float b_star = 0.3f;
+
+        auto gen = [&](int N, std::vector<float>& X, std::vector<float>& Y) {
+            X.resize(N * F);
+            Y.resize(N);
+            for (int i = 0; i < N; i++) {
+                float logit = b_star;
+                for (int f = 0; f < F; f++) {
+                    X[i * F + f] = gauss(rng);
+                    logit += X[i * F + f] * w_star[f];
+                }
+                Y[i] = (prob(rng) < 1.0f / (1.0f + std::exp(-logit))) ? 1.0f : 0.0f;
+            }
+        };
+        std::vector<float> x_tr, y_tr, x_te, y_te;
+        gen(N_train, x_tr, y_tr);
+        gen(N_test, x_te, y_te);
+
+        Graph g6;
+        auto x6 = g6.placeholder("x", {N_train, F});
+        auto y6 = g6.placeholder("y", {N_train});
+        auto w6 = g6.variable_vec("w", F, 0.0f);
+        auto b6 = g6.variable("b", 0.0f);
+
+        // QAT 范围: 训练中按观测更新 (对应 TF 对 FakeQuantWithMinMaxVars 的
+        // min/max 做 EMA 更新; 这里用 running min/max 简化)。x 全批喂入 →
+        // 首轮观测即定死 (小 batch 场景每轮不同); w 从 0 长到 w_star 附近,
+        // 范围每轮都在变, 这是范围更新机制真正起作用的地方。
+        auto [xmin, xmax] = tensor_minmax(Tensor(x_tr, {N_train, F}));
+        float wmin = 0.0f, wmax = 0.0f;
+        nudge_range(wmin, wmax);  // 初值全 0 → 防除零
+        auto x6_q = g6.fake_quant(x6, xmin, xmax);
+        auto w6_q = g6.fake_quant(w6, wmin, wmax);
+        auto logit6 = g6.add(g6.matmul(x6_q, w6_q), b6);
+        auto pred6 = g6.sigmoid(logit6);
+        // BCE loss (与 demo 5 相同)
+        auto one6 = g6.constant("one", Tensor(1.0f));
+        auto p_loss = g6.mul(y6, g6.log(pred6));
+        auto n_loss = g6.mul(g6.sub(one6, y6), g6.log(g6.sub(one6, pred6)));
+        auto loss6 = g6.mul(g6.mean(g6.add(p_loss, n_loss)),
+                            g6.constant("minus_one", Tensor(-1.0f)));
+        auto grads6 = build_gradients(g6, loss6);
+        auto tr_w6 = g6.sgd_step(w6, grads6[w6], 0.3f);
+        auto tr_b6 = g6.sgd_step(b6, grads6[b6], 0.3f);
+        std::unordered_map<const Node*, Tensor> feed6 = {
+            {x6, Tensor(x_tr, {N_train, F})}, {y6, Tensor(y_tr, {N_train})}};
+        Session s6;
+        for (int e = 0; e < epochs; e++) {
+            s6.run(g6, {tr_w6, tr_b6}, feed6);
+            // 每轮按观测扩展 w 范围 (只改节点字段, 不触发图重编译;
+            // FAKE_QUANT_GRAD 从 fake_quant 节点现场读范围 → 即时生效)
+            const Tensor& wv = s6.var_value(w6);
+            auto [bw0, bw1] = tensor_minmax(wv);
+            wmin = std::min(wmin, bw0);
+            wmax = std::max(wmax, bw1);
+            w6_q->qmin = wmin;
+            w6_q->qmax = wmax;
+        }
+        std::cout << "  训练完成: loss=" << s6.run(g6, {loss6}, feed6)[0].data[0]
+                  << std::endl;
+        std::cout << "  训练范围: x ∈ [" << xmin << ", " << xmax << "]  w ∈ ["
+                  << wmin << ", " << wmax << "]" << std::endl;
+
+        // fp32 基线: QAT 训练出的真实权重, 纯 fp32 算术 (去掉假量化的模型能力)
+        std::vector<float> w_final(F);
+        {
+            const Tensor& wv = s6.var_value(w6);
+            for (int f = 0; f < F; f++) w_final[f] = wv.data[f];
+        }
+        float b_final = s6.var_value(b6).data[0];
+        Tensor logits_fp32(std::vector<int>{N_test});
+        for (int n = 0; n < N_test; n++) {
+            float l = b_final;
+            for (int f = 0; f < F; f++) l += x_te[n * F + f] * w_final[f];
+            logits_fp32.data[n] = l;
+        }
+
+        // 部署 (fake quant 形态): 推理图带着 fake quant 直接跑 —— 与量化部署同式
+        prune(g6, {pred6});
+        std::cout << "  推理图: " << g6.nodes().size() << " nodes" << std::endl;
+        std::unordered_map<const Node*, Tensor> feed_te6 = {
+            {x6, Tensor(x_te, {N_test, F})}};
+        auto logits_fq = s6.run(g6, {logit6}, feed_te6)[0];
+
+        // 导出 (真 int8): 用训练冻结的范围做 quantize_inference —— QAT 的权重链
+        // variable → fake_quant → matmul 会被烘焙成 int8 常量, 范围沿用训练值;
+        // 激活的 quantize 吃 fake_quant 的输出, 而往返值就在 int8 网格上 →
+        // 二次量化是恒等 (不引入额外误差)
+        nudge_range(xmin, xmax);
+        nudge_range(wmin, wmax);
+        std::unordered_map<const Node*, Tensor> vars6;
+        for (const auto& un : g6.nodes())
+            if (un->type == VARIABLE) vars6[un.get()] = s6.var_value(un.get());
+        quantize_inference(g6, vars6, {{x6_q, {xmin, xmax}}}, {{w6_q, {wmin, wmax}}});
+        std::cout << "  量化图: " << g6.nodes().size() << " nodes" << std::endl;
+        auto logits_i8 = s6.run(g6, {logit6}, feed_te6)[0];
+
+        // 指标 (与 demo 5 同款 AUC/acc)
+        auto auc = [&](const Tensor& logits) {
+            std::vector<int> idx(N_test);
+            std::iota(idx.begin(), idx.end(), 0);
+            std::sort(idx.begin(), idx.end(), [&](int i, int j) {
+                return logits.data[i] < logits.data[j];
+            });
+            double rank_sum = 0;
+            int n_pos = 0;
+            for (int r = 0; r < N_test; r++)
+                if (y_te[idx[r]] > 0.5f) { rank_sum += r + 1; n_pos++; }
+            double n_neg = N_test - n_pos;
+            return (rank_sum - n_pos * (n_pos + 1.0) / 2.0) / (n_pos * n_neg);
+        };
+        auto acc = [&](const Tensor& logits) {
+            int hit = 0;
+            for (int i = 0; i < N_test; i++)
+                hit += ((logits.data[i] > 0) == (y_te[i] > 0.5f));
+            return double(hit) / N_test;
+        };
+        double auc_fp32 = auc(logits_fp32), auc_fq = auc(logits_fq),
+               auc_i8 = auc(logits_i8);
+        std::cout << "  fp32(真实权重): AUC=" << auc_fp32 << "  acc="
+                  << acc(logits_fp32) << std::endl;
+        std::cout << "  QAT fake-quant: AUC=" << auc_fq << "  acc="
+                  << acc(logits_fq) << std::endl;
+        std::cout << "  QAT int8 导出:  AUC=" << auc_i8 << "  acc="
+                  << acc(logits_i8) << std::endl;
+
+        // fake quant (训练时的模拟) 与真 int8 (部署) 之差: 只来自 2016 版
+        // MIN_COMBINED 的 offset 单独舍入 (量化/反量化用 min/max, matmul 用
+        // round(min*s)), 量级 ~0.5 level × 另一侧的值
+        float fq_i8_max = 0, fq_i8_sum = 0;
+        for (int i = 0; i < N_test; i++) {
+            float e = std::fabs(logits_fq.data[i] - logits_i8.data[i]);
+            fq_i8_max = std::max(fq_i8_max, e);
+            fq_i8_sum += e;
+        }
+        std::cout << "  fake-quant vs int8 logits 差: max=" << fq_i8_max
+                  << "  mean=" << fq_i8_sum / N_test << std::endl;
+
+        // 与 demo 5 (PTQ) 直接对照: 同一份数据, 两种训练方式各自的量化掉点
+        std::cout << "  对照 demo 5 (PTQ): AUC " << demo5_fp32_auc << " → "
+                  << demo5_i8_auc << " (掉 " << demo5_fp32_auc - demo5_i8_auc << ")"
+                  << std::endl;
+        std::cout << "  本 demo  (QAT): AUC " << auc_fp32 << " → " << auc_i8
+                  << " (掉 " << auc_fp32 - auc_i8 << ")" << std::endl;
     }
     return 0;
 }
