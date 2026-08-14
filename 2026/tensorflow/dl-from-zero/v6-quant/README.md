@@ -29,6 +29,15 @@ Dequantize:      int32/int8 → float       x = (c + 2^31) * (max-min)/(2^32-1) 
 
 ## 量化数学(kernels/quantize.h, 逐条对应 2016 源码)
 
+> **看不懂 scale/level/zero_point? 一个等价视角**: 直觉版量化 = 先 norm 到 [0,1] 再 ×256。我们的公式只是同一件事:
+> - `×255` 不是 `×256`: 255 是间隔数, 端点 x=max → q=127 恰好铺满不越界 (×256 在 max 处溢出要 clamp)
+> - `-128` 是平移: 无符号 [0,255] → 带符号 [-128,127] (int8 是带符号类型), 不改变任何信息
+> - `level` = (max-min)/255 = "一档多宽" (你的 1/256 宽度); `scale` = 255/(max-min) = 1/level = 你的 256/(max-min)
+> - `zero_point`(offset) = 浮点 0 对应的整数档位 = 你版本里 q'(0) 那个数, 唯一作用是 matmul 里居中: `(q - offset)·level ≈ x`, 不居中两个 [0,255] 整数相乘符号量级就乱
+> 数字对照 (x=0.5): 你的 q'=round(0.5847×256)=150 ↔ 我们 q=round(0.5847×255)-128=21 (150-128=22, 差 1 是 255/256)
+
+
+
 | 公式 | 对应 TF 源码 |
 |---|---|
 | `q = round((clamp(x,min,max) - min) * 255/(max-min)) - 128` | `quantize_op.cc` QuantizeV2, MIN_COMBINED 模式 |
