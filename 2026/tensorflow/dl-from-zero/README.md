@@ -12,7 +12,8 @@ dl-from-zero/
 ├── v2-ps-worker/    PS/Worker 分布式训练(单机多进程)
 ├── v3-concurrent/   TF-like 图/运行时状态分离, 同一张图可并发推理
 ├── v4-grad/         独立梯度子图(对应 TF gradients.py)
-└── v5-opt/          图优化: CSE + 常量折叠(对应 optimizer_cse.cc + constant_folding.cc)
+├── v5-opt/          图优化: CSE + 常量折叠(对应 optimizer_cse.cc + constant_folding.cc)
+└── v6-quant/        量化/低精度推理: int8 (对应首个量化 commit ca4e053aa52 + 论文 §5)
 ```
 
 每版 = 上一版 + 一个新概念。建议按顺序读。
@@ -56,6 +57,12 @@ dl-from-zero/
 - **加分项**: 过滤规则逐条对应 TF `Equivalent()`(is_stateful / attrs / 输入全等 / 交换律规范化); Session run 前自动跑 pass pipeline(CSE → 折叠 → CSE), Graph 加结构代数 `generation` 让编译缓存自动失效
 - 文件: `graph/optimize.h` `graph/graph.h` `session.h` `main.cpp`(4 个 demo: CSE / 折叠 / 负例 / 三 pass 串联)
 
+## v6-quant — 量化/低精度推理
+
+- **概念**: fp32 不是免费的——推理瓶颈在带宽和算力。训练好的模型把权重/激活压到 int8(对应 TF 首个量化 commit `ca4e053aa52`, 2016-04-22 + 论文 v2 §5): `QuantizeV2`(min/max → int8, MIN_COMBINED) → `QuantizedMatMul`(int8×int8, int32 累加, offset 即 zero-point 雏形) → `Dequantize`; 图层面把 matmul 替换成三件套, 权重静态烘焙成 int8 常量(freeze), 激活范围由校准数据统计
+- **加分项**: 公式逐条对应 2016 源码(含 epsilon nudge、QuantizationRangeForMultiplication 的精确输出范围); 诚实标注 gemmlowp 快路径当时被 `if(false && ...)` 禁用、实际跑 ReferenceGemm; CSE 哈希加入 qmin/qmax 防误合并; demo 验证 int8 推理 AUC 几乎不掉点(0.8807 → 0.8805)
+- 文件: `kernels/quantize.h` `graph/quantize.h` `graph/graph.h` `kernels/kernels.h` `main.cpp`(demo 5: 校准 → 量化 → fp32 vs int8)
+
 ---
 
 ## 演进脉络(为什么这么排)
@@ -67,9 +74,10 @@ v2  分布式                        → 变量放远一点(PS)
 v3  状态从图里挪出去              → 同一张图可并发跑
 v4  反向也变成图                  → 梯度子图统一进图, prune 自然剪掉
 v5  执行前先优化图                → CSE/常量折叠, 编译期消除浪费 (三件套: DCE/CSE/折叠)
+v6  推理用低精度                  → int8 量化, 带宽/算力降 4x, 精度几乎无损
 ```
 
-最后一版(v4)反过来验证了 TF 最核心的设计直觉:**训练和推理的差别, 从"运行时标记"变成"图结构上的可达性"**——这就是 `gradients.py` 把梯度建成子图的意义。
+v4 反过来验证了 TF 最核心的设计直觉:**训练和推理的差别, 从"运行时标记"变成"图结构上的可达性"**——这就是 `gradients.py` 把梯度建成子图的意义。v5/v6 则覆盖了 TF 推理落地的两条主线: 编译期消除浪费(图优化) + 低精度计算(量化)。
 
 ## 运行
 
