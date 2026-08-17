@@ -198,9 +198,13 @@ int main() {
     print_count("after prune{y_pred} (inference graph)", g);  // 5
 
     // 并发推理: 同一张图被多个线程同时跑 (v3/v4 保留节目)
+    //   耗时是 convoy 验收指标: 旧版固定 worker 池一个 run 卡 GPU 等待时
+    //   独占全部池线程, 并发 run 串行 (趋近一次一个请求); closure 模型下
+    //   空闲 run 不占线程, 8 线程应真并发。
     const int n_threads = 8, iters = 5000;
     std::vector<std::thread> threads;
     std::vector<double> mean_err(n_threads, 0.0);
+    auto t_conc_0 = std::chrono::steady_clock::now();
     for (int t = 0; t < n_threads; t++) {
         threads.emplace_back([&, t]() {
             float tx = -4.0f + t;
@@ -214,9 +218,12 @@ int main() {
         });
     }
     for (auto& th : threads) th.join();
+    double conc_ms = std::chrono::duration<double, std::milli>(
+                         std::chrono::steady_clock::now() - t_conc_0)
+                         .count();
 
     std::cout << "\n  concurrent inference: " << n_threads << " threads x " << iters
-              << " runs on the same graph:" << std::endl;
+              << " runs on the same graph: " << conc_ms << " ms total" << std::endl;
     for (int t = 0; t < n_threads; t++) {
         float tx = -4.0f + t;
         std::cout << "    thread " << t << "  x=" << tx
@@ -425,6 +432,57 @@ int main() {
         std::cout << "  7c gemm : scalar " << gm_sc << " ms  vs  SME2 " << gm_za
                   << " ms  (" << gm_sc / gm_za << "x, " << gm_gflops << " GFLOPS)"
                   << std::endl;
+    }
+
+    // ============================================================
+    // demo 8: 并发 GPU 推理 —— closure 模型的 convoy 修复验收 (v8)
+    //   场景: 混设备图 (GPU matmul 异步 + CPU 逐元素) × 多 worker × 8 线程并发
+    //   旧版固定 worker 池: run A 的 worker 全部 park 在 GPU 异步等待, 独占
+    //   池线程; run B 的任务饿死 → 并发 run 串行 (总耗时 ≈ run 数 × 单次)。
+    //   实测基线 (v7 初版 executor): 8 线程 x 200 runs ≈ 933 ms。
+    //   closure 模型: GPU 节点提交后闭包返回、线程归还, 其他 run 的 CPU
+    //   计算插空执行 → GPU 等待与其他 run 重叠, 应显著低于串行基线。
+    // ============================================================
+    std::cout << "\n== demo 8: 并发 GPU 推理 (convoy 修复验收) ==" << std::endl;
+    {
+        const int N = 4096, F = 256;
+        const int n_threads = 8, iters = 200;
+        std::mt19937 rng(7);
+        std::uniform_real_distribution<float> u(-1.0f, 1.0f);
+        Tensor wv(std::vector<int>{F});
+        for (int f = 0; f < F; f++) wv.data[f] = u(rng);
+        Graph g;
+        auto x = g.placeholder("x", {N, F});
+        auto mm = g.matmul(x, g.constant("w", wv));
+        auto y = g.sigmoid(g.add(mm, g.constant("b", Tensor(0.1f))));
+        g.on(mm, Device::GPU);  // 同 demo 6 的混设备图
+        Tensor feed(std::vector<int>{N, F});
+        for (int i = 0; i < N * F; i++) feed.data[i] = u(rng);
+
+        Session sess;
+        sess.SetWorkers(8);  // 多 worker: 旧版此场景全部 park 占池
+        sess.run(g, {y}, {{x, feed}});  // 暖机
+
+        std::vector<std::thread> threads;
+        double mean_y = 0.0;
+        auto t0 = std::chrono::steady_clock::now();
+        for (int t = 0; t < n_threads; t++) {
+            threads.emplace_back([&, t]() {
+                double acc = 0.0;
+                for (int i = 0; i < iters; i++) {
+                    auto r = sess.run(g, {y}, {{x, feed}});
+                    acc += r[0].data[0];
+                }
+                if (t == 0) mean_y = acc / iters;
+            });
+        }
+        for (auto& th : threads) th.join();
+        double ms = std::chrono::duration<double, std::milli>(
+                        std::chrono::steady_clock::now() - t0)
+                        .count();
+        std::cout << "  " << n_threads << " threads x " << iters << " runs: "
+                  << ms << " ms total (mean_y=" << mean_y
+                  << ", 旧版固定 worker 池基线 ≈ 933 ms)" << std::endl;
     }
 
     return 0;

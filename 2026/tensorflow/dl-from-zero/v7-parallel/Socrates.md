@@ -16,4 +16,16 @@ SIGILL (非法指令): SM=1 时只能执行 streaming-compatible 代码, 调非 
 实测: 每次 SM 状态切换后 d8-d15 全为 0, 与是否首次、是否含 ZA 操作无关。机制疑似 Apple SME 状态保存/恢复路径的副作用 (V 寄存器跨 SM 边界的语义由 Apple 实现决定), 未必在别的 SME 硬件上复现。对用户代码的含义: 任何包含 smstart/smstop 的内联 asm 都必须把 v8-v15 列入 clobber, 让编译器负责保存/恢复调用者的寄存器。
 (2026-08-17)
 
+### Q: 为什么固定 worker 池的 executor 同时只能跑一个 infer 请求? (convoy)
+worker 池模型每次 Run 提交 N 个 WorkerLoop, loop 在共享就绪队列空时 park 等任务。一个 run 卡在 GPU 异步等待 (就绪队列已空) 时, 其全部 worker park, **独占池线程**; 其他并发 run 的任务在池队列里饿死 —— 并发 run 退化为串行, 且是霸占式。TF 正版 SimpleExecutorState 无此问题: 它不 park, 没有就绪节点时计算链终止、线程归还池。修复 = closure 模型 (对齐 SimpleExecutorState): 就绪节点直接作为闭包提交线程池, 便宜节点内联到当前线程的 inline 队列 (tail-call 语义), 空闲 run 占用线程数为 0。实测 (混设备图 × 8 worker × 8 线程并发): 旧版 933 ms (串行) → 新版 293 ms (3.2x, GPU 等待与其他 run 的 CPU 计算重叠)。
+(2026-08-17)
+
+### Q: closure 模型重构后, 纯 CPU 小图并发推理为什么反而略慢? 修复白做了吗?
+不是白做: 调度开销换并发性。demo 3 推理图是 5 节点链 (3 根节点), 每次 run 新版提交 3 个闭包 (3 次锁+cv 原语), 旧版提交 1 个 WorkerLoop; 40000 次 run 多 8 万次原语 ≈ +15% 耗时 (103 → 120 ms)。旧版在这个场景「快」是因为它本来就串行 (1 worker 下无并发可被牺牲); convoy 收益只出现在 GPU 异步等待场景 (demo 8 的 3.2x)。两种模型各有适用面, 数字如实记录在 README。
+(2026-08-17)
+
+### Q: 为什么 closure 版 executor 首次并发推理会 SIGSEGV? (提交循环竞态)
+use-after-free 链: Run 的根节点提交循环**无锁**遍历 plan.order 边提交闭包边读 es->pending; 闭包入池后池线程立即执行并递减 pending, 提交循环把「已被并发递减到 0 的非根节点」误判为根节点**重复提交** → op 重复执行 → outstanding 提前归零 → Finish (delete es) 发生在提交循环运行期间 → 提交循环读已删除的 es。修复: 两阶段提交 —— 先持锁把根节点收集进局部 vector, 再提交闭包 (收集发生在任何闭包入池之前, pending 无并发修改)。调试过程: TSan 与 Metal 不兼容、ASan 太慢、-O0 不复现 (时序相关, 仅 -O2) → instrumented 日志证明复现链。
+(2026-08-17)
+
 <!-- 以下继续记录 -->

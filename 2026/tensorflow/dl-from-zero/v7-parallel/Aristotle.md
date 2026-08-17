@@ -6,5 +6,7 @@
 - Plan agent 太慢卡死, kill 掉, 直接在当前会话里做 plan (2026-08-14) [decision]
 - 编译失败 —— 我的删除脚本把 `sme2_mv_za` 的函数结尾 `}` 也删掉了。立即检查并修复 (2026-08-17)
 - 接下去: 集成 kernels.h CPU matmul + Makefile `-mcpu=apple-m4`, main.cpp 加 demo 7: SME2/AMX 实测 (2026-08-17)
+- 贴了 review 评论对比 lf::Executor 和 TF SimpleExecutorState: 这个 demo 版的 queue 似乎同时只能跑一个 infer 请求? 如果 thread 在 wait 上一个节点结束, 他是无法把这个线程让给其他的 infer 请求的 (2026-08-17)
+- ok, 开干, 记得文档末尾贴一下 main demo 跑的 output (2026-08-17) [decision]
 
 <!-- 以下继续记录 -->
