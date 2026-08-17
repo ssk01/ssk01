@@ -237,10 +237,15 @@ int main() {
     //   调度只影响执行顺序, 每个 op 的 kernel 不变 → 输出必须逐位一致
     //   注意: matmul 显式 CPU —— 本 demo 单独演示执行队列 (worker 池调度),
     //   设备放置 (auto-GPU) 由 demo 6 演示
+    //   matmul 关掉 SME2 走标量: ZA (AMX) 在并发线程间不隔离, 必须全局互斥,
+    //   并发 matmul 会退化为顺序 (实测加速比 ~1.0x, 诚实记录在 README) ——
+    //   demo 5 要展示的是执行队列的并行调度, matmul kernel 的速度是 demo 7
+    //   的舞台 (7c: SME2 gemm 2.6x); 块内开关, 跑完恢复
     // ============================================================
     std::cout << "\n== demo 5: 执行队列 (op 并发执行) ==" << std::endl;
     {
         const int N = 8192, F = 512, n_branch = 8;
+        matmul_use_sme2 = false;  // 标量路径: 无锁, 真并发 (见上面注释)
         std::mt19937 rng(42);
         std::uniform_real_distribution<float> u(-1.0f, 1.0f);
 
@@ -303,6 +308,7 @@ int main() {
                       << ")" << std::endl;
         }
         std::cout << "  加速比: " << ms_seq / ms_par << "x" << std::endl;
+        matmul_use_sme2 = true;  // 恢复: 后续 demo (训练/7/8) 走 SME2
     }
 
     // ============================================================

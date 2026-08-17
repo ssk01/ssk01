@@ -131,7 +131,7 @@ make && ./build/train
 | demo | 内容 | 结果 |
 |------|------|------|
 | 1-4 | 继承 v5: CSE / 常量折叠 / prune 串联 | 同 v5 |
-| 5 | 执行队列: 8 独立 matmul 分支 + 树状合并, 1 worker vs 硬件并发数 | 输出逐位一致; **加速比 ~1.01x** (诚实: matmul 走 SME2 且 ZA 段 mutex 串行化, 并行被串行抵消) |
+| 5 | 执行队列: 8 独立 matmul 分支 + 树状合并, 1 worker vs 硬件并发数 | 输出逐位一致; **加速比 ~5.5x** (matmul 用标量路径: ZA/AMX 在并发线程间不隔离, 全局互斥会让并发 matmul 退化为顺序 —— 实测 ~1.0x, 诚实记录; 并发调度用无锁路径, SME2 速度由 demo 7 单独演示) |
 | 6 | 设备放置: matmul 显式 GPU (Metal 异步) + 逐元素自动 CPU | 混设备 ~0.89 ms vs 全 CPU ~1.01 ms (小形状 dispatch 开销占比大, 诚实数字) |
 | 7 | SME2/AMX 实测 | 7a/7b 逐位一致; 7c matvec ~0.48x (单列 ZA 1/4 tile + 未 unroll), **gemm ~2.64x / ~9 GFLOPS** (4×4 tile 16 MAC/指令) |
 | 8 | 并发 GPU 推理 (v8 convoy 验收): 混设备图 × 8 worker × 8 线程并发 | 新版 ~293 ms vs 旧版基线 ~933 ms (3.2x), mean_y 一致 |
@@ -213,10 +213,10 @@ insr 串行), SME2 反而慢; GEMM 4×4 每指令 16 MAC, 才是 AMX 的正确�
 
 == demo 5: 执行队列 (op 并发执行) ==
   图: 8 个独立 matmul 分支 + 树状合并 (33 nodes, [8192,512]×[512])
-  顺序 (1 worker):  27.5788 ms   y=4.004
-  并行 (14 workers): 27.27 ms   y=4.004
+  顺序 (1 worker):  13.9703 ms   y=4.004
+  并行 (14 workers): 2.532 ms   y=4.004
   输出逐位一致: yes
-  加速比: 1.01133x
+  加速比: 5.51748x
 
 == demo 6: 设备放置 (simple_placer) ==
   混设备图 placement (name: device):
