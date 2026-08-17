@@ -70,7 +70,7 @@ dl-from-zero/
 
 - **概念**: 执行不再单线程拓扑遍历 —— op 就绪即可并发跑(TF `executor.cc` 的 ready queue + threadpool): 图按依赖拆成执行队列, worker 线程池消费就绪 op; 设备放置(simple_placer): 每个 Node 带 device 字符串, 无显式指定时按 kernel 支持度自动放置; CPU 设备补上**手写 SME2 asm GEMM**(M4 AMX): `fmopa` 外积累加进 ZA tile, 对应 commit 1 的 Eigen CPU matmul; GPU 设备用手写 Metal compute shader(`metal_matmul.metal`)
 - **加分项**: 手写 SME2 asm 的踩坑记录全在 `sme2_gemm.h` 头注释(st1w 在 M4 上存整个 64B ZA tile → 越界 48B; **M4 每次 smstart/smstop 清零 callee-saved d8-d15** → asm 必须声明 v8-v15 clobber); demo 7 诚实数字: matvec 只用 ZA 单列(1/4 tile)且未 unroll, SME2 反而慢 0.49x; GEMM 4×4 每指令 16 MAC, 2.7x / ~9 GFLOPS; ZA 多线程并发互相覆盖 → mutex 串行化 ZA 段, demo 5 打印诚实加速比(0.997x)
-- 文件: `kernels/sme2_gemm.h` `kernels/metal_matmul.metal` `graph/graph.h` `runtime.h` `session.h` `main.cpp`(demo 5: 执行队列; demo 6: 设备放置; demo 7: SME2/AMX 实测)
+- 文件: `core/executor.h` `core/place.h` `core/threadpool.h` `kernels/sme2_gemm.h` `kernels/metal_matmul.metal` `core/metal_matmul.mm` `main.cpp`(demo 5: 执行队列; demo 6: 设备放置; demo 7: SME2/AMX 实测), 详见本目录 README.md
 
 ---
 
