@@ -123,6 +123,13 @@ demo 级差异: 只量化 matmul 一层, bias 保持 fp32(2016 的 `quantized_bi
 
 训练图: `logit = matmul(fake_quant(x), fake_quant(w)) + b`, bias 保持 fp32 (与 demo 5 一致)。fake_quant 的梯度有两条腿: 激活侧梯度是 [N] 对 [N,F] 的逐行掩码广播, 权重侧是 [F] 等尺寸逐元素——对应 matmul 两个输入的梯度形状。
 
+### 训练时到底在训什么 (计算精度 / 被训对象 / 模型初始化)
+
+- **计算精度**: QAT 训练全程 GEMM 是 **fp32** —— `matmul(fake_quant(x), fake_quant(w))` 就是普通 fp32 matmul, fake quant 只把输入拍扁到 int8 网格。真正的 int8 GEMM (`Q_MATMUL`) 只在导出时才出现。想训练时享受 int8 加速 = 前向换 `quantized_matmul`、反向保 fp32 (梯度量级无界, int8 一量化就丢精度)——但工业界基本不做 int8 训练, 训练主流是 fp16/bf16, int8 留给推理 (反向精度需求把 int8 优势抵消)
+- **被训的对象**: 只有 **w / b** 走 `sgd_step`; 范围 `qmin/qmax` 是每轮 running min/max **观测更新** (图外代码, 只改节点字段, 不参与梯度); x 是输入数据。参数 + 范围, 就这么两样
+- **模型初始化**: w 全 0 (`variable_vec("w", F, 0.0f)`)、b 全 0 —— 单层逻辑回归零初始化即可 (数据随机天然破对称, 不需要随机 init); 初始 w 范围 `[0, 0.01]` 来自 `nudge_range(0,0)` 的 ε 修正。数据侧真值 `w_star` 才是 `uniform(-1,1)` 随机
+- **掩码与范围的追赶机制**: 每轮**先 run 后扩范围** → epoch e 用的是 epoch e-1 的范围, 当某个 w[i] 长出上一轮范围时 `qmin ≤ w[i] ≤ qmax` 为假 → 梯度被截 0 按住, 直到下一轮范围追上来。这就是"网格约束权重、权重拉扯网格"的微观机理 (x 侧是全批精确 min/max, 训练内必然全在范围内, 掩码恒 1, 不执行)
+
 ### 导出(QAT 图直接喂 quantize_inference)
 
 ```
