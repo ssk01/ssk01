@@ -13,7 +13,8 @@ dl-from-zero/
 ├── v3-concurrent/   TF-like 图/运行时状态分离, 同一张图可并发推理
 ├── v4-grad/         独立梯度子图(对应 TF gradients.py)
 ├── v5-opt/          图优化: CSE + 常量折叠(对应 optimizer_cse.cc + constant_folding.cc)
-└── v6-quant/        量化/低精度推理: int8 (对应首个量化 commit ca4e053aa52 + 论文 §5)
+├── v6-quant/        量化/低精度推理: int8 (对应首个量化 commit ca4e053aa52 + 论文 §5)
+└── v7-parallel/     执行队列(op 并发执行) + 设备放置(simple_placer) + SME2/AMX + Metal (对应 commit 1 的 executor/threadpool/simple_placer/GPU)
 ```
 
 每版 = 上一版 + 一个新概念。建议按顺序读。
@@ -65,6 +66,14 @@ dl-from-zero/
 
 ---
 
+## v7-parallel — 并发执行 + 多设备
+
+- **概念**: 执行不再单线程拓扑遍历 —— op 就绪即可并发跑(TF `executor.cc` 的 ready queue + threadpool): 图按依赖拆成执行队列, worker 线程池消费就绪 op; 设备放置(simple_placer): 每个 Node 带 device 字符串, 无显式指定时按 kernel 支持度自动放置; CPU 设备补上**手写 SME2 asm GEMM**(M4 AMX): `fmopa` 外积累加进 ZA tile, 对应 commit 1 的 Eigen CPU matmul; GPU 设备用手写 Metal compute shader(`metal_matmul.metal`)
+- **加分项**: 手写 SME2 asm 的踩坑记录全在 `sme2_gemm.h` 头注释(st1w 在 M4 上存整个 64B ZA tile → 越界 48B; **M4 每次 smstart/smstop 清零 callee-saved d8-d15** → asm 必须声明 v8-v15 clobber); demo 7 诚实数字: matvec 只用 ZA 单列(1/4 tile)且未 unroll, SME2 反而慢 0.49x; GEMM 4×4 每指令 16 MAC, 2.7x / ~9 GFLOPS; ZA 多线程并发互相覆盖 → mutex 串行化 ZA 段, demo 5 打印诚实加速比(0.997x)
+- 文件: `kernels/sme2_gemm.h` `kernels/metal_matmul.metal` `graph/graph.h` `runtime.h` `session.h` `main.cpp`(demo 5: 执行队列; demo 6: 设备放置; demo 7: SME2/AMX 实测)
+
+---
+
 ## 演进脉络(为什么这么排)
 
 ```
@@ -75,6 +84,7 @@ v3  状态从图里挪出去              → 同一张图可并发跑
 v4  反向也变成图                  → 梯度子图统一进图, prune 自然剪掉
 v5  执行前先优化图                → CSE/常量折叠, 编译期消除浪费 (三件套: DCE/CSE/折叠)
 v6  推理用低精度                  → int8 量化, 带宽/算力降 4x, 精度几乎无损
+v7  并发执行 + 多设备            → executor/threadpool + simple_placer + AMX/Metal
 ```
 
 v4 反过来验证了 TF 最核心的设计直觉:**训练和推理的差别, 从"运行时标记"变成"图结构上的可达性"**——这就是 `gradients.py` 把梯度建成子图的意义。v5/v6 则覆盖了 TF 推理落地的两条主线: 编译期消除浪费(图优化) + 低精度计算(量化)。
