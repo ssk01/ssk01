@@ -8,6 +8,12 @@
 
 namespace lf {
 
+// CPU matmul kernel 开关: true → [N,F]×[F] 走 SME2/AMX (ZA), false → 标量
+// tensor_matmul。ZA 硬件在并发 streaming 线程间不隔离 (sme2_gemm.h:177),
+// 必须全局互斥 → 并发 matmul 变顺序。demo 5 (执行队列并发调度) 因此关掉
+// SME2 展示真并行; SME2 速度由 demo 7 单独演示。
+inline bool matmul_use_sme2 = true;
+
 // 前向: 把每个节点的输出写进本轮 RunState。
 // 注意: 没有独立的 backward 了 —— 梯度计算本身是图里的节点(梯度子图),
 //       和正向一样走 forward。对应 TF: gradients.py 把梯度建成子图, 由 Executor 执行。
@@ -42,7 +48,7 @@ inline void forward(Node* node, RunState& st) {
         // 其他形状/无 SME2 环境 → 原 tensor_matmul / cblas 兜底
         const Tensor& A = st.out(node->inputs[0]);
         const Tensor& B = st.out(node->inputs[1]);
-        if (A.shape.size() == 2 && B.shape.size() == 1 &&
+        if (matmul_use_sme2 && A.shape.size() == 2 && B.shape.size() == 1 &&
             A.shape[1] == static_cast<int>(B.shape[0])) {
             const int N = A.shape[0], F = A.shape[1];
             Tensor out(std::vector<int>{N});

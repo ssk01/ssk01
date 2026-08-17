@@ -28,4 +28,8 @@ worker 池模型每次 Run 提交 N 个 WorkerLoop, loop 在共享就绪队列�
 use-after-free 链: Run 的根节点提交循环**无锁**遍历 plan.order 边提交闭包边读 es->pending; 闭包入池后池线程立即执行并递减 pending, 提交循环把「已被并发递减到 0 的非根节点」误判为根节点**重复提交** → op 重复执行 → outstanding 提前归零 → Finish (delete es) 发生在提交循环运行期间 → 提交循环读已删除的 es。修复: 两阶段提交 —— 先持锁把根节点收集进局部 vector, 再提交闭包 (收集发生在任何闭包入池之前, pending 无并发修改)。调试过程: TSan 与 Metal 不兼容、ASan 太慢、-O0 不复现 (时序相关, 仅 -O2) → instrumented 日志证明复现链。
 (2026-08-17)
 
+### Q: demo 5 执行队列的加速比为什么只有 ~1.0x? 并行白做了吗?
+不是调度问题, 是 matmul kernel 被 ZA 硬件串行化了: demo 5 的 8 个 matmul 走 SME2 (kernels.h 默认), 而 M4 的 ZA/AMX 在并发 streaming 线程间不隔离, `sme2_gemm` 必须用全局 `za_mutex` 互斥 —— 8 个 matmul 在锁上排队串行 (实测 ~27ms ≈ 8 × 单次 3.3ms, 1 worker 和 14 worker 同速, 加速比 ~1.01x)。修复: CPU matmul 加 `matmul_use_sme2` 开关, demo 5 关掉 SME2 走无锁标量路径, 并发真正展开 → 加速比 1.01x → 5.5x (1w 14.0ms vs 14w 2.5ms, 逐位一致)。SME2 速度由 demo 7 单独演示 (2.7x)。取舍: 一个 demo 只展示一件事 —— demo 5 的舞台是调度, kernel 速度是 demo 7 的舞台。
+(2026-08-17)
+
 <!-- 以下继续记录 -->
