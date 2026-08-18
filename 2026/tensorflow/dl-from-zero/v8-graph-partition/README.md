@@ -3,6 +3,7 @@
 > 对应 TF commit 1 的 `graph_partition.cc` (1050 行) + rendezvous 机制。
 > v7 已经做了 simple_placer 给节点分配设备，v8 补上**跨设备数据传输**：
 > 在切边处插入 Send/Recv 节点，通过 rendezvous 配对完成设备间通信。
+> **包含 Send/Recv 梯度反向传播支持，支持跨设备训练。**
 
 ## 核心概念 (meta 问题)
 
@@ -72,6 +73,27 @@ v8 补上的:
 - Partition: 把图切成多个子图，每个子图一个设备
 - Send/Recv: 跨设备边变成 rendezvous 通信
 - 多设备并发执行: 每个子图一个 ExecState，同时跑
+- **Send/Recv 梯度支持**: 梯度可以跨设备反向传播
+- **SGD_STEP colocation**: 优化器节点和变量强制在同一设备
+
+## 关键修复（2026-08-18）
+
+### 问题：Send/Recv 梯度缺失导致跨设备训练失败
+
+**症状**: 变量在 GPU，梯度在 CPU 时，训练完全不收敛（loss 不下降，变量不更新）
+
+**根因**:
+1. `graph/gradients.h` 中 Send/Recv 没有 case，梯度链在跨设备边断掉
+2. `core/place.h` 中 SGD_STEP 未与 VARIABLE colocation，导致优化器在 CPU 无法更新 GPU 变量
+
+**修复**:
+1. **gradients.h**: 添加 Send/Recv 的梯度处理
+   - SEND: 梯度直接传给输入（透明传输）
+   - RECV: 梯度传给配对 Send 的输入
+2. **place.h**: 添加 colocation 约束
+   - SGD_STEP 强制与其第一个输入（变量）在同一设备
+
+**验证**: `test_cross_device_training.cpp` 测试跨设备训练（变量在 GPU），loss 从 0.236 降到 2.92e-14，收敛到正确值。
 
 ## 与 v2 (PS-Worker) 的关系
 
