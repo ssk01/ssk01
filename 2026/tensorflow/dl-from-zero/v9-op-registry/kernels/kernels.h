@@ -2,9 +2,11 @@
 #include <functional>
 #include "../core/metal_matmul.h"
 #include "../framework/tensor.h"
+#include "../framework/kernel_registry.h"
 #include "../graph/graph.h"
 #include "../runtime.h"
 #include "sme2_gemm.h"
+#include "registered_kernels.h"  // 加载所有 kernel 注册
 
 namespace lf {
 
@@ -17,12 +19,47 @@ inline bool matmul_use_sme2 = true;
 // 前向: 把每个节点的输出写进本轮 RunState。
 // 注意: 没有独立的 backward 了 —— 梯度计算本身是图里的节点(梯度子图),
 //       和正向一样走 forward。对应 TF: gradients.py 把梯度建成子图, 由 Executor 执行。
+//
+// v9 版本：使用 Op 注册系统替代 switch-case
 inline void forward(Node* node, RunState& st) {
+    // 特殊节点直接处理
+    if (node->type == PLACEHOLDER) {
+        return;  // 值已由 feed 写入
+    }
+    if (node->type == SGD_STEP) {
+        return;  // 不产生输出; 由 Session 在正向之后应用梯度
+    }
+
+    // 节点类型名映射
+    static const char* type_names[] = {
+        "PLACEHOLDER", "VARIABLE", "CONST", "ADD", "MUL", "SUB", "SQUARE",
+        "MEAN", "MATMUL", "SIGMOID", "LOG", "RECIP", "REDUCE_SUM", "SGD_STEP",
+        "MEAN_GRAD", "MATMUL_GRAD_A", "MATMUL_GRAD_B", "SEND", "RECV"
+    };
+
+    const char* op_name = type_names[node->type];
+
+    // 从注册表查找 kernel
+    const KernelDef* kernel = KernelRegistry::Global().LookUp(op_name, Device::CPU);
+
+    if (!kernel) {
+        throw std::runtime_error(std::string("No kernel registered for op: ") + op_name);
+    }
+
+    // 构造上下文并执行
+    OpKernelContext ctx;
+    ctx.node = node;
+    ctx.state = &st;
+
+    kernel->kernel_fn(&ctx);
+}
+
+// 旧版本（switch-case）保留用于对比
+inline void forward_legacy(Node* node, RunState& st) {
     switch (node->type) {
     case PLACEHOLDER:
         break;  // 值已由 feed 写入 st.outputs
     case VARIABLE:
-        // 从 Session 的持久变量表读当前值 (对应 TF VariableOp 读自己的 Var buffer)
         st.out(node) = st.vars->at(node);
         break;
     case CONST:
@@ -44,8 +81,6 @@ inline void forward(Node* node, RunState& st) {
         st.out(node) = tensor_mean(st.out(node->inputs[0]));
         break;
     case MATMUL: {
-        // CPU matmul: [N,F]×[F]→[N] 走 SME2/AMX (M4, -mcpu=apple-m4);
-        // 其他形状/无 SME2 环境 → 原 tensor_matmul / cblas 兜底
         const Tensor& A = st.out(node->inputs[0]);
         const Tensor& B = st.out(node->inputs[1]);
         if (matmul_use_sme2 && A.shape.size() == 2 && B.shape.size() == 1 &&
@@ -81,16 +116,13 @@ inline void forward(Node* node, RunState& st) {
         st.out(node) = tensor_matmul_grad_b(st.out(node->inputs[0]), st.out(node->inputs[1]));
         break;
     case SGD_STEP:
-        break;  // 不产生输出; 由 Session 在正向之后应用梯度
+        break;
     case SEND:
-        // Send: 把 input[0] 的输出送进 rendezvous (v8)
-        // 注意: st.rendezvous 由 Session::Run 传入
         if (st.rendezvous) {
             st.rendezvous->Send(node->rendezvous_key, st.out(node->inputs[0]));
         }
         break;
     case RECV:
-        // Recv: 从 rendezvous 取出 tensor, 阻塞等待 Send (v8)
         if (st.rendezvous) {
             st.out(node) = st.rendezvous->Recv(node->rendezvous_key);
         }

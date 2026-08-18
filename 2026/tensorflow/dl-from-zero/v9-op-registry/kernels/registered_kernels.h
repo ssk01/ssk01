@@ -255,39 +255,4 @@ struct RegisterRecvCPU {
 
 }  // namespace
 
-// 用注册系统替代原来的 forward() 函数
-inline void forward_registered(Node* node, RunState& st) {
-    // 获取节点类型名
-    static const char* type_names[] = {
-        "PLACEHOLDER", "VARIABLE", "CONST", "ADD", "MUL", "SUB", "SQUARE",
-        "MEAN", "MATMUL", "SIGMOID", "LOG", "RECIP", "REDUCE_SUM", "SGD_STEP",
-        "MEAN_GRAD", "MATMUL_GRAD_A", "MATMUL_GRAD_B", "SEND", "RECV"
-    };
-
-    // PLACEHOLDER 和 SGD_STEP 特殊处理
-    if (node->type == PLACEHOLDER) {
-        return;  // 值已由 feed 写入
-    }
-    if (node->type == SGD_STEP) {
-        return;  // 不产生输出; 由 Session 在正向之后应用梯度
-    }
-
-    const char* op_name = type_names[node->type];
-
-    // 从注册表查找 kernel
-    const KernelDef* kernel_def = KernelRegistry::Global().LookUp(op_name, Device::CPU);
-
-    if (!kernel_def) {
-        throw std::runtime_error(std::string("No kernel registered for op: ") + op_name);
-    }
-
-    // 构造执行上下文
-    OpKernelContext ctx;
-    ctx.node = node;
-    ctx.state = &st;
-
-    // 调用注册的 kernel
-    kernel_def->kernel_fn(&ctx);
-}
-
 }  // namespace lf
