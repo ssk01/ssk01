@@ -80,6 +80,21 @@ public:
                 add_contrib(n->inputs[0], g_.matmul_grad_a(g, n->inputs[1]));
                 add_contrib(n->inputs[1], g_.matmul_grad_b(g, n->inputs[0]));
                 break;
+            case SEND:
+                // Send 是透明传输，梯度直接传给它的输入
+                add_contrib(n->inputs[0], g);
+                break;
+            case RECV:
+                // Recv 的梯度需要通过反向的 Send 传回去
+                // Recv 的 inputs[0] 是控制依赖的 Send (partition.h:94)
+                // 梯度应该传给 Send 的数据输入
+                if (!n->inputs.empty() && n->inputs[0]->type == SEND) {
+                    Node* send = n->inputs[0];
+                    if (!send->inputs.empty()) {
+                        add_contrib(send->inputs[0], g);
+                    }
+                }
+                break;
             default:
                 break;  // PLACEHOLDER/VARIABLE/CONST/SGD_STEP/梯度 kernel: 无反向路径
             }
