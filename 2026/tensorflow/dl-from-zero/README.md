@@ -14,7 +14,8 @@ dl-from-zero/
 ├── v4-grad/         独立梯度子图(对应 TF gradients.py)
 ├── v5-opt/          图优化: CSE + 常量折叠(对应 optimizer_cse.cc + constant_folding.cc)
 ├── v6-quant/        量化/低精度推理: int8 (对应首个量化 commit ca4e053aa52 + 论文 §5)
-└── v7-parallel/     执行队列(op 并发执行) + 设备放置(simple_placer) + SME2/AMX + Metal (对应 commit 1 的 executor/threadpool/simple_placer/GPU)
+├── v7-parallel/     执行队列(op 并发执行) + 设备放置(simple_placer) + SME2/AMX + Metal (对应 commit 1 的 executor/threadpool/simple_placer/GPU)
+└── v8-graph-partition/ 图分区 + Send/Recv (跨设备数据传输) + rendezvous (对应 commit 1 的 graph_partition.cc + IntraProcessRendezvous)
 ```
 
 每版 = 上一版 + 一个新概念。建议按顺序读。
