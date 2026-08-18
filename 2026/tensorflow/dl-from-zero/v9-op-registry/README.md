@@ -3,6 +3,7 @@
 > 对应 TF commit 1 的 op 注册地基 + 数据管线机制 + 稀疏张量 + 查找表。
 > v0-v8 用枚举 switch 实现 op，v9 改为**注册表驱动** (op 即数据)，并加入
 > 搜广推/LLM 训练的核心数据结构。
+> **2026-08-18 更新：Op 注册系统现已完全实现并接入执行引擎。**
 
 ## 核心概念 (meta 问题)
 
@@ -22,23 +23,50 @@ switch (node->type) {                      // 中心化 switch
 
 v9 改为**注册表驱动** (对应 TF 的 REGISTER_OP):
 ```cpp
-OpRegistry::Register("MatMul")
+// 1. 注册 op 定义
+OpDefBuilder("MatMul")
     .Input("a: float")
     .Input("b: float")
     .Output("product: float")
     .Attr("transpose_a: bool = false")
-    .SetShapeFn([](InferenceContext* c) { ... });
+    .Finalize();
 
-KernelRegistry::Register("MatMul")
-    .Device(CPU)
-    .TypeConstraint<float>("T")
-    .Kernel([](OpKernelContext* ctx) { ... });
+// 2. 注册 kernel 实现
+KernelDefBuilder("MatMul")
+    .DeviceType(Device::CPU)
+    .Kernel([](OpKernelContext* ctx) {
+        const Tensor& a = ctx->input(0);
+        const Tensor& b = ctx->input(1);
+        ctx->set_output(tensor_matmul(a, b));
+    })
+    .Finalize();
+
+// 3. 执行时动态查找
+const KernelDef* kernel = KernelRegistry::Global().LookUp("MatMul", Device::CPU);
+kernel->kernel_fn(ctx);
 ```
 
 优势：
 - **去中心化**：op 定义和 kernel 实现分离，可插拔
-- **可扩展**：用户可注册自定义 op
+- **可扩展**：用户可注册自定义 op（无需修改框架代码）
 - **元信息完整**：类型检查、形状推导、属性验证
+- **多设备支持**：同一 op 可注册 CPU/GPU 多个 kernel
+
+## 实现状态（2026-08-18）
+
+### ✓ 已实现
+- `framework/op_registry.h` - OpDef 注册系统
+- `framework/kernel_registry.h` - Kernel 注册系统
+- `kernels/registered_kernels.h` - 17 个内置 op 的 CPU kernel 注册
+- `forward_registered()` - 注册表驱动的执行引擎
+- `test_registered_kernels.cpp` - 完整验证（基本算子 + 训练流程）
+
+### 测试结果
+```
+✓ 基本算子（ADD/MUL）正确执行
+✓ 线性回归训练收敛（y = 2x + 1）
+✓ 17 个 op 全部注册并可查询
+```
 
 ---
 
