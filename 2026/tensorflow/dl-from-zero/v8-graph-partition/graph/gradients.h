@@ -81,18 +81,37 @@ public:
                 add_contrib(n->inputs[1], g_.matmul_grad_b(g, n->inputs[0]));
                 break;
             case SEND:
-                // Send 是透明传输，梯度直接传给它的输入
-                add_contrib(n->inputs[0], g);
+                // Send 的梯度是一个 Recv（从反向通道接收梯度）
+                // 正向: data (device A) → Send → Recv (device B)
+                // 反向: grad (device A) ← Recv ← Send (device B)
+                {
+                    std::string grad_key = n->rendezvous_key + "_grad";
+                    Node* grad_recv = g_.recv("recv_grad_" + n->name);
+                    grad_recv->rendezvous_key = grad_key;
+                    grad_recv->device = n->device;  // 和 Send 同设备
+                    add_contrib(n->inputs[0], grad_recv);
+                }
                 break;
             case RECV:
-                // Recv 的梯度需要通过反向的 Send 传回去
-                // Recv 的 inputs[0] 是控制依赖的 Send (partition.h:94)
-                // 梯度应该传给 Send 的数据输入
-                if (!n->inputs.empty() && n->inputs[0]->type == SEND) {
-                    Node* send = n->inputs[0];
-                    if (!send->inputs.empty()) {
-                        add_contrib(send->inputs[0], g);
-                    }
+                // Recv 的梯度是一个 Send（把梯度发回源设备）
+                // 正向: data (device A) → Send (device A) → Recv (device B)
+                // 反向: grad (device A) ← Recv ← Send (device B) ← grad (device B)
+                //
+                // 注意：g 是这个 RECV 节点的梯度（已经通过链式法则计算出来）
+                // 我们需要创建一个 SEND 节点来发送这个梯度
+                {
+                    std::string grad_key = n->rendezvous_key + "_grad";
+                    Node* grad_send = g_.send("send_grad_" + n->name, g);
+                    grad_send->rendezvous_key = grad_key;
+                    grad_send->device = n->device;  // 和 Recv 同设备
+
+                    // grad_send 的结果不会被任何节点消费（它只是发送操作）
+                    // 但我们需要确保它在反向传播时被执行
+                    // 这里不需要 add_contrib，因为 RECV 没有需要传梯度的输入节点
+
+                    // 重要：将这个 grad_send 记录为 RECV 的"真正梯度"
+                    // 覆盖之前通过链式法则累加的梯度
+                    grad_map_[n] = grad_send;
                 }
                 break;
             default:
