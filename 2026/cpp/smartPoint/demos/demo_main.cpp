@@ -81,30 +81,33 @@ int main()
         p->bar();
     }
 
-    std::cout << "\n" "3) Custom deleter demo\n";
-    std::ofstream("demo.txt") << 'x';
-    {
-        using unique_file_t = Uniqlo<std::FILE, decltype(&close_file)>;
-        unique_file_t fp(std::fopen("demo.txt", "r"), &close_file);
-        if (fp)
-            std::cout << char(std::fgetc(fp.get())) << '\n';
-    }
+    // 3) Custom deleter demo — 注释：函数指针 deleter（void(*)(T*)）不能作为基类，
+    //    EBO 继承式 Uniqlo 目前不支持（需要分派式或 [[no_unique_address]] 成员式）
+    // std::cout << "\n" "3) Custom deleter demo\n";
+    // std::ofstream("demo.txt") << 'x';
+    // {
+    //     using unique_file_t = Uniqlo<std::FILE, decltype(&close_file)>;
+    //     unique_file_t fp(std::fopen("demo.txt", "r"), &close_file);
+    //     if (fp)
+    //         std::cout << char(std::fgetc(fp.get())) << '\n';
+    // }
 
-    std::cout << "\n" "4) Custom lambda expression deleter and exception safety demo\n";
-    try
-    {
-        Uniqlo<D, void(*)(D*)> p(new D, [](D* ptr)
-        {
-            std::cout << "destroying from a custom deleter...\n";
-            delete ptr;
-        });
-
-        throw std::runtime_error("");
-    }
-    catch (const std::exception&)
-    {
-        std::cout << "Caught exception\n";
-    }
+    // 4) Custom lambda expression deleter and exception safety demo — 同上，lambda 转成函数指针
+    // std::cout << "\n" "4) Custom lambda expression deleter and exception safety demo\n";
+    // try
+    // {
+    //     Uniqlo<D, void(*)(D*)> p(new D, [](D* ptr)
+    //     {
+    //         std::cout << "destroying from a custom deleter...\n";
+    //         delete ptr;
+    //     });
+    //
+    //     throw std::runtime_error("");
+    // }
+    // catch (const std::exception&)
+    // {
+    //     std::cout << "Caught exception\n";
+    // }
 
     std::cout << "\n" "5) Array form of unique_ptr demo\n";
     {

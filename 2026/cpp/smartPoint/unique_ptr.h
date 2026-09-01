@@ -1,67 +1,175 @@
 #include <cstddef>
+#include <functional>
 #include <memory>
+#include <type_traits>
 #include <utility>
 
-using namespace std;
-
 template <typename T> struct DefaultDeleter {
-  void operator()(T *p) { delete p; }
+  DefaultDeleter() = default;
+  // 多态转换: default_delete<D> → default_delete<B>（D* 可转 B*）
+  template <typename U, std::enable_if_t<std::is_convertible_v<U *, T *>, int> = 0>
+  DefaultDeleter(const DefaultDeleter<U> &) {}
+  template <typename U, std::enable_if_t<std::is_convertible_v<U *, T *>, int> = 0>
+  DefaultDeleter &operator=(const DefaultDeleter<U> &) { return *this; }
+  void operator()(T *p) const { delete p; }
 };
 template <typename T> struct DefaultDeleter<T[]> {
-  void operator()(T *p) { delete[] p; }
+  DefaultDeleter() = default;
+  void operator()(T *p) const { delete[] p; }
 };
 
-template <typename T, typename Deleter = DefaultDeleter<T>>
-class Uniqlo : private Deleter {
+// ============================================================
+// 公共基类：存储（T* + deleter, EBO）+ 所有权操作
+// 单对象和数组共用：两者都存"元素指针 T*"
+// ============================================================
+template <typename T, typename Deleter>
+class UniqloBase : private Deleter {
+protected:
+  T *t_;
+
 public:
-  explicit Uniqlo(T *t) : t_(t) {};
-  explicit Uniqlo(T *t, Deleter d) : Deleter(d), t_(t) {};
-  ~Uniqlo() {
-    if (t_ != nullptr) {
-      get_deleter()(t_);
-    }
-  }
-  Uniqlo(Uniqlo &t) = delete;
-  Uniqlo &operator=(const Uniqlo &t) = delete;
-  Uniqlo(Uniqlo &&u) : Deleter(std::forward<Deleter>(u.get_deleter())), t_(u.release()) {}
-  Uniqlo &operator=(Uniqlo &&u) {
+  UniqloBase() noexcept : Deleter(), t_(nullptr) {}
+  explicit UniqloBase(T *t) noexcept : t_(t) {}
+  explicit UniqloBase(T *t, Deleter d) : Deleter(d), t_(t) {}
+  UniqloBase(const UniqloBase &) = delete;
+  UniqloBase &operator=(const UniqloBase &) = delete;
+  UniqloBase(UniqloBase &&u) noexcept
+      : Deleter(std::forward<Deleter>(u.get_deleter())), t_(u.release()) {}
+  UniqloBase &operator=(UniqloBase &&u) noexcept {
     if (this != &u) {
       get_deleter()(t_);
       t_ = u.t_;
       u.t_ = nullptr;
+      get_deleter() = std::forward<Deleter>(u.get_deleter());
     }
     return *this;
   }
-  T &operator*() { return *t_; }
-  T *operator->() { return t_; }
-  const T &operator*() const { return *t_; }
-  const T *operator->() const { return t_; }
+  ~UniqloBase() {
+    if (t_ != nullptr) {
+      get_deleter()(t_);
+    }
+  }
 
-  // 3. get() / release() / reset() / swap() — 所有权查看与转移
   T *get() { return t_; }
+  const T *get() const { return t_; }
   T *release() {
     T *tmp = t_;
     t_ = nullptr;
     return tmp;
   }
-
-  void reset(T *t) {
+  void reset(T *t = nullptr) {
     if (t_ != nullptr) {
-        get_deleter()(t_);
+      get_deleter()(t_);
     }
     t_ = t;
   }
-  void swap(Uniqlo &u) { 
-    std::swap(u.t_, t_);
-    std::swap(u.get_deleter(), get_deleter());
- }
+  void swap(UniqloBase &u) {
+    std::swap(t_, u.t_);
+    std::swap(get_deleter(), u.get_deleter());
+  }
   explicit operator bool() { return t_ != nullptr; }
+  explicit operator bool() const { return t_ != nullptr; }
   const Deleter &get_deleter() const { return *(static_cast<const Deleter *>(this)); }
   Deleter &get_deleter() { return *(static_cast<Deleter *>(this)); }
-
-private:
-  T *t_;
 };
-template <class T, class... Args> Uniqlo<T> make_uniqlo(Args &&...args) {
+
+// ============================================================
+// 单对象 Uniqlo<T>：薄包装，加 operator* / -> 和 多态转换 move
+// ============================================================
+template <typename T, typename Deleter = DefaultDeleter<T>>
+class Uniqlo : public UniqloBase<T, Deleter> {
+  using Base = UniqloBase<T, Deleter>;
+
+public:
+  using Base::Base;
+  using Base::operator=;
+
+  T &operator*() { return *this->t_; }
+  const T &operator*() const { return *this->t_; }
+  T *operator->() { return this->t_; }
+  const T *operator->() const { return this->t_; }
+
+  // 多态转换 move 构造: Uniqlo<U, E> → Uniqlo<T, D>（U* 可转 T*）
+  template <typename U, typename E,
+            std::enable_if_t<std::is_convertible_v<U *, T *>, int> = 0>
+  Uniqlo(Uniqlo<U, E> &&u) noexcept
+      : Base(u.release(), std::forward<E>(u.get_deleter())) {}
+  template <typename U, typename E,
+            std::enable_if_t<std::is_convertible_v<U *, T *>, int> = 0>
+  Uniqlo &operator=(Uniqlo<U, E> &&u) noexcept {
+    this->reset(u.release());
+    this->get_deleter() = std::forward<E>(u.get_deleter());
+    return *this;
+  }
+};
+
+// ============================================================
+// 数组 Uniqlo<T[]>：薄包装，加 operator[]，没有 * / ->
+// ============================================================
+template <typename T, typename Deleter>
+class Uniqlo<T[], Deleter> : public UniqloBase<T, Deleter> {
+  using Base = UniqloBase<T, Deleter>;
+
+public:
+  using Base::Base;
+  using Base::operator=;
+
+  T &operator[](std::size_t i) { return this->t_[i]; }
+  const T &operator[](std::size_t i) const { return this->t_[i]; }
+};
+
+// ============================================================
+// make_uniqlo
+// ============================================================
+// 变参版用 enable_if 排除数组类型，否则 make_uniqlo<int[]>(5) 会精确匹配
+// 变参版（int&& 比 int→size_t 转换更优）而走 new int[](5) 报错
+template <class T, class... Args,
+          std::enable_if_t<!std::is_array_v<T>, int> = 0>
+Uniqlo<T> make_uniqlo(Args &&...args) {
   return Uniqlo<T>(new T(std::forward<Args>(args)...));
 }
+template <class T> Uniqlo<T> make_uniqlo(std::size_t n) {
+  return Uniqlo<T>(new std::remove_extent_t<T>[n]);
+}
+
+// ============================================================
+// 比较运算符（owner 语义: 比的是 get() 指针本身）
+// ============================================================
+template <typename T, typename D, typename U, typename E>
+bool operator==(const Uniqlo<T, D> &a, const Uniqlo<U, E> &b) {
+  return a.get() == b.get();
+}
+template <typename T, typename D>
+bool operator==(const Uniqlo<T, D> &a, std::nullptr_t) { return !a; }
+template <typename T, typename D>
+bool operator==(std::nullptr_t, const Uniqlo<T, D> &a) { return !a; }
+template <typename T, typename D, typename U, typename E>
+bool operator!=(const Uniqlo<T, D> &a, const Uniqlo<U, E> &b) {
+  return a.get() != b.get();
+}
+template <typename T, typename D>
+bool operator!=(const Uniqlo<T, D> &a, std::nullptr_t) { return (bool)a; }
+template <typename T, typename D>
+bool operator!=(std::nullptr_t, const Uniqlo<T, D> &a) { return (bool)a; }
+template <typename T, typename D, typename U, typename E>
+bool operator<(const Uniqlo<T, D> &a, const Uniqlo<U, E> &b) {
+  return a.get() < b.get();
+}
+template <typename T, typename D, typename U, typename E>
+bool operator>(const Uniqlo<T, D> &a, const Uniqlo<U, E> &b) { return b < a; }
+template <typename T, typename D, typename U, typename E>
+bool operator<=(const Uniqlo<T, D> &a, const Uniqlo<U, E> &b) { return !(b < a); }
+template <typename T, typename D, typename U, typename E>
+bool operator>=(const Uniqlo<T, D> &a, const Uniqlo<U, E> &b) { return !(a < b); }
+
+// ============================================================
+// std::hash 特化（单一特化同时覆盖单对象和数组）
+// ============================================================
+namespace std {
+template <typename T, typename D>
+struct hash<::Uniqlo<T, D>> {
+  size_t operator()(const ::Uniqlo<T, D> &u) const noexcept {
+    return hash<decltype(u.get())>()(u.get());
+  }
+};
+} // namespace std
