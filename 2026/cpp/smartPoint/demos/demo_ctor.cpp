@@ -40,10 +40,9 @@ int main()
     {   // deleter type is not a reference
         Uniqlo<Foo, D> up3(new Foo, d); // deleter copied
     }
-    // deleter type is a reference — 注释：D& 不能作为基类，EBO 继承式 Uniqlo 不支持
-    // {   // deleter type is a reference
-    //     Uniqlo<Foo, D&> up3b(new Foo, d); // up3b holds a reference to d
-    // }
+    {   // deleter type is a reference
+        Uniqlo<Foo, D&> up3b(new Foo, d); // up3b holds a reference to d
+    }
 
     std::cout << "Example constructor(4)...\n";
     {   // deleter is not a reference
@@ -61,9 +60,8 @@ int main()
         Uniqlo<Foo, D> up6a(new Foo, d); // D is copied
         Uniqlo<Foo, D> up6b(std::move(up6a)); // D is moved
 
-        // D& 引用 deleter — 注释：EBO 继承式不支持，需要分派式或 [[no_unique_address]]
-        // Uniqlo<Foo, D&> up6c(new Foo, d); // D is a reference
-        // Uniqlo<Foo, D> up6d(std::move(up6c)); // D is copied
+        Uniqlo<Foo, D&> up6c(new Foo, d); // D is a reference
+        Uniqlo<Foo, D> up6d(std::move(up6c)); // D is copied
     }
 
     std::cout << "Example array constructor...\n";

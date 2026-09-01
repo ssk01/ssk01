@@ -19,22 +19,54 @@ template <typename T> struct DefaultDeleter<T[]> {
 };
 
 // ============================================================
+// deleter 存储层（分派式 EBO，老 libc++ __compressed_pair_elem 思路）
+// - 类类型 && 空 && 非final → 继承（EBO，0 字节）
+// - 否则（函数指针/引用/非空/final）→ 存成员
+// ============================================================
+template <typename D>
+using CanEbo = std::bool_constant<std::is_class_v<D> && std::is_empty_v<D> && !std::is_final_v<D>>;
+
+// 能当空基类 → 继承
+template <typename D, bool = CanEbo<D>::value>
+class DeleterHolder : private D {
+public:
+  DeleterHolder() noexcept = default;
+  template <typename D2> explicit DeleterHolder(D2 &&d) noexcept : D(std::forward<D2>(d)) {}
+  D &get_deleter() noexcept { return *this; }
+  const D &get_deleter() const noexcept { return *this; }
+};
+
+// 不能 → 存成员（函数指针、引用、非空类）
+template <typename D>
+class DeleterHolder<D, false> {
+  D d_;
+
+public:
+  DeleterHolder() noexcept : d_() {}
+  template <typename D2> explicit DeleterHolder(D2 &&d) noexcept : d_(std::forward<D2>(d)) {}
+  D &get_deleter() noexcept { return d_; }
+  const D &get_deleter() const noexcept { return d_; }
+};
+
+// ============================================================
 // 公共基类：存储（T* + deleter, EBO）+ 所有权操作
 // 单对象和数组共用：两者都存"元素指针 T*"
 // ============================================================
 template <typename T, typename Deleter>
-class UniqloBase : private Deleter {
+class UniqloBase : private DeleterHolder<Deleter> {
+  using Holder = DeleterHolder<Deleter>;
+
 protected:
   T *t_;
 
 public:
-  UniqloBase() noexcept : Deleter(), t_(nullptr) {}
-  explicit UniqloBase(T *t) noexcept : t_(t) {}
-  explicit UniqloBase(T *t, Deleter d) : Deleter(d), t_(t) {}
+  UniqloBase() noexcept : Holder(), t_(nullptr) {}
+  explicit UniqloBase(T *t) noexcept : Holder(), t_(t) {}
+  explicit UniqloBase(T *t, Deleter d) : Holder(std::forward<Deleter>(d)), t_(t) {}
   UniqloBase(const UniqloBase &) = delete;
   UniqloBase &operator=(const UniqloBase &) = delete;
   UniqloBase(UniqloBase &&u) noexcept
-      : Deleter(std::forward<Deleter>(u.get_deleter())), t_(u.release()) {}
+      : Holder(std::forward<Deleter>(u.get_deleter())), t_(u.release()) {}
   UniqloBase &operator=(UniqloBase &&u) noexcept {
     if (this != &u) {
       get_deleter()(t_);
@@ -69,8 +101,8 @@ public:
   }
   explicit operator bool() { return t_ != nullptr; }
   explicit operator bool() const { return t_ != nullptr; }
-  const Deleter &get_deleter() const { return *(static_cast<const Deleter *>(this)); }
-  Deleter &get_deleter() { return *(static_cast<Deleter *>(this)); }
+  const Deleter &get_deleter() const { return Holder::get_deleter(); }
+  Deleter &get_deleter() { return Holder::get_deleter(); }
 };
 
 // ============================================================
