@@ -11,5 +11,6 @@
 - 类型擦除做完后：拷贝构造/赋值改收 const&、观察者标 const、assign 补释放旧引用与 return *this、lock 改按值返回，一次性 commit [decision]
 - 我加的 deleter 构造修语法后仍炸（无捕获 lambda 引用局部 d），让我去读官方 libc++ 源码看 deleter 怎么存，然后按官方案子实现自定义 deleter [decision]
 - deleter 存储不用 [[no_unique_address]]，改用 libc++ 老派 __compressed_pair_elem 的 CanBeEmptyBase 分派（空且非 final → 继承式 EBO，否则存成员）[decision]
-(2026-09-04 18:15)
+- 加 operator*/operator bool/unique/fetch_sub 后 demo 11/13；我写坏的自由 swap（!= 走了 bool truthiness + 私有访问）让我修：改成员 swap + 自由函数走成员，然后 commit push [decision]
+(2026-09-04 18:30)
 <!-- 以下继续记录 -->

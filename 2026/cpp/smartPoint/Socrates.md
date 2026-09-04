@@ -65,4 +65,9 @@
 - 生命周期：强计数归零 `__release_shared()` 调虚 `__on_zero_shared()` → `__deleter_(__ptr_); __deleter_.~_Dp();`（用完即析构 deleter，配合 allocator 走 placement-delete 释放块，不二次调 dtor）；弱也归零 → `__on_zero_shared_weak()` 用 allocator 释放内存。强计数用原子 decrement，等于 -1 触发（官方计数从 0 往 -1 走，use_count = 值+1）。
 - 我们的简化版对应：`ShyPtrBase<T>`（保留 ptr_/get，纯虚 dispose）↔ 官方计数基类；`ShyPtrCtl<T,Y,D>`（按值存 D del_ + Y* raw_，dispose 调 del_(raw_)）↔ __shared_ptr_pointer。没照抄的两点：官方把指针放派生、shared_ptr 另存一份（为 alias/数组），我们用 delete base_ 而非 allocator placement-delete，所以不提前手动析构 deleter、留给派生 dtor。
 (2026-09-04 17:59)
+### Q: 写了个自由函数 `swap(ShyPtr&, ShyPtr&)`，里面 `if (lhs != rhs)` 能编译但是交换不生效，为什么？
+- ShyPtr 没定义 `operator!=`，那行能编译是**碰巧走了 operator bool 的 truthiness 比较**：`lhs != rhs` 被解释成 `bool(lhs) != bool(rhs)`。两个不同的非空所有者都转成 true → `true != true` 为 false → **直接跳过 swap**；而且这不是想要的"同一对象"判断（要比得比 get()/base_ 指针）。
+- 又一个 operator bool 的副作用：一旦给了上下文转换，`==`/`!=`/`<` 等没显式定义时会悄悄退化成 bool 比较而不是编译错——这种"能编译但语义全错"比编译错更危险。
+- swap 自由函数还因不是 friend 摸不到私有 base_（编译错）。修法：改成**成员 swap**（`std::swap(base_, other.base_)`，无需 != 条件，自交换也安全），自由函数版 `l.swap(r)` 转发即可。demo 用的本来就是成员 `p1.swap(p2)`。
+(2026-09-04 18:30)
 <!-- 以下继续记录 -->

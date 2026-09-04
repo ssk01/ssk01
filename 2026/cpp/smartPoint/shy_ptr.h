@@ -25,8 +25,8 @@ public:
         return ptr_;
     }
     void reset() {
-        count_--;
-        if (count_ == 0) {
+        
+        if (count_.fetch_sub(1) == 1) {
             dispose();
         }
     };
@@ -163,6 +163,14 @@ public:
         return use_count() == 1;
     }
 
+    T& operator*() const {
+        return *get();
+    }
+
+    void swap(ShyPtr& other) {
+        std::swap(base_, other.base_);
+    }
+
 private:
     void release() {
         if (base_ != nullptr) {
@@ -189,6 +197,12 @@ public:
         release();
     }
     WeakPtr(const WeakPtr& ptr) {
+        base_ = ptr.base_;
+        if (base_ != nullptr) {
+            base_->increaseCb();
+        }
+    }
+    WeakPtr(const ShyPtr<T>& ptr) {
         base_ = ptr.base_;
         if (base_ != nullptr) {
             base_->increaseCb();
@@ -244,6 +258,10 @@ public:
             return ShyPtr<T>(*this);
         }
     }
+
+    void swap(WeakPtr& other) {
+        std::swap(base_, other.base_);
+    }
     
 private:
     void release() {
@@ -260,4 +278,14 @@ private:
 template <typename T, typename... Args>
 ShyPtr<T> make_shyptr(Args &&...args) {
     return ShyPtr<T>(new T(std::forward<Args>(args)...));
+}
+
+template<class T>
+void swap(ShyPtr<T>& lhs, ShyPtr<T>& rhs) {
+    lhs.swap(rhs);
+}
+
+template<class T>
+void swap(WeakPtr<T>& lhs, WeakPtr<T>& rhs) {
+    lhs.swap(rhs);
 }
