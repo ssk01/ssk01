@@ -5,7 +5,11 @@ using namespace std;
 template<typename T>
 class ShyPtrBase {
 public:
-    ShyPtrBase(T* ptr) : ptr_(ptr), count_(1) {
+    template<typename Y>
+    ShyPtrBase(Y* ptr)
+        : ptr_(ptr),
+          deleter_([](T* p) { delete static_cast<Y*>(p); }),
+          count_(1), cb_cnt(0) {
 
     }
     int use_count() {
@@ -16,9 +20,8 @@ public:
     }
     void reset() {
         count_--;
-        // cb_cnt--;
         if (count_ == 0) {
-            delete ptr_;
+            deleter_(ptr_);
         }
     };
     void increase_count() {
@@ -36,6 +39,7 @@ public:
  
 private:
     T* ptr_;
+    void (*deleter_)(T*);
     atomic_int count_;
     atomic_int cb_cnt;
 };
@@ -49,16 +53,12 @@ class ShyPtr  {
     friend class WeakPtr<T>;
 public:
     ShyPtr() :base_(nullptr) {}
-    ShyPtr(T* ptr) : base_(new ShyPtrBase<T>(ptr)){
+    template<typename Y>
+    ShyPtr(Y* ptr) : base_(new ShyPtrBase<T>(ptr)){
 
     }
     ~ShyPtr() {
-        if (base_ != nullptr) {
-            base_->reset();
-            if (base_->expired()) {
-                delete base_;
-            }
-        }
+        release();
     }
     ShyPtr(const WeakPtr<T>& ptr) {
         base_ = ptr.base_;
@@ -66,30 +66,39 @@ public:
             base_->increase_count();
         }
     }
-    ShyPtr(ShyPtr& ptr) {
+    ShyPtr(const ShyPtr& ptr) {
         base_ = ptr.base_;
-        base_->increase_count();
+        if (base_ != nullptr) {
+            base_->increase_count();
+        }
     }
     ShyPtr(ShyPtr&& ptr) {
         base_ = ptr.base_;
         ptr.base_ = nullptr;
     }
 
-    ShyPtr& operator=(ShyPtr& ptr) {
+    ShyPtr& operator=(const ShyPtr& ptr) {
+        if (this == &ptr) return *this;
+        release();
         base_ = ptr.base_;
-        base_->increase_count();
+        if (base_ != nullptr) {
+            base_->increase_count();
+        }
+        return *this;
     }
     ShyPtr& operator=(ShyPtr&& ptr) {
+        if (this == &ptr) return *this;
+        release();
         base_ = ptr.base_;
         ptr.base_ = nullptr;
+        return *this;
     }
     int use_count() const {
         if (!base_) return 0;
         return base_->use_count();
     }
     void reset() {
-        base_->reset();
-        base_ = nullptr;   
+        release();
     }
 
     T* get() const {
@@ -98,6 +107,15 @@ public:
     }
 
 private:
+    void release() {
+        if (base_ != nullptr) {
+            base_->reset();
+            if (base_->expired()) {
+                delete base_;
+            }
+            base_ = nullptr;
+        }
+    }
     ShyPtrBase<T> *base_;
 };
 
@@ -106,58 +124,63 @@ class WeakPtr  {
     friend class ShyPtr<T>;
 public:
     WeakPtr() :base_(nullptr) {}
-    WeakPtr(T* ptr) : base_(new ShyPtrBase<T>(ptr)){
+    template<typename Y>
+    WeakPtr(Y* ptr) : base_(new ShyPtrBase<T>(ptr)){
         base_->increaseCb();
     }
     ~WeakPtr() {
-        if (base_ != nullptr) {
-            base_->releaseCb();
-            if (base_->expired()) {
-                delete base_;
-            }
-        }
+        release();
     }
-    WeakPtr(WeakPtr& ptr) {
+    WeakPtr(const WeakPtr& ptr) {
         base_ = ptr.base_;
-        base_->increaseCb();
+        if (base_ != nullptr) {
+            base_->increaseCb();
+        }
     }
     WeakPtr(WeakPtr&& ptr) {
         base_ = ptr.base_;
         ptr.base_ = nullptr;
     }
     WeakPtr& operator=(const ShyPtr<T>& ptr) {
+        release();
         base_ = ptr.base_;
         if (base_ != nullptr) {
             base_->increaseCb();
         }
+        return *this;
     }
 
-    WeakPtr& operator=(WeakPtr& ptr) {
+    WeakPtr& operator=(const WeakPtr& ptr) {
+        if (this == &ptr) return *this;
+        release();
         base_ = ptr.base_;
         if (base_ != nullptr) {
             base_->increaseCb();
         }
+        return *this;
     }
     WeakPtr& operator=(WeakPtr&& ptr) {
+        if (this == &ptr) return *this;
+        release();
         base_ = ptr.base_;
         ptr.base_ = nullptr;
+        return *this;
     }
-    int use_count() {
+    int use_count() const {
         if (!base_) return 0;
         return base_->use_count();
     }
     void reset() {
-        base_->releaseCb();
-        base_ = nullptr;   
+        release();
     }
-    bool expired() {
+    bool expired() const {
         if (base_ == nullptr) {
             return true;
         } else {
             return base_->use_count() == 0;
         }
     }
-    ShyPtr<T>& lock() {
+    ShyPtr<T> lock() const {
         if (expired()) {
             return ShyPtr<T>{};
         } else {
@@ -166,8 +189,14 @@ public:
     }
     
 private:
+    void release() {
+        if (base_ != nullptr) {
+            base_->releaseCb();
+            if (base_->expired()) {
+                delete base_;
+            }
+            base_ = nullptr;
+        }
+    }
     ShyPtrBase<T> *base_;
 };
-
-// todo. const shyptr 怎么解决常量引用的问题?
-//
