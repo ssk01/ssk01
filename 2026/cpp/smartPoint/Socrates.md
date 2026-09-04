@@ -33,4 +33,10 @@
 - 空 deleter 之间 swap = no-op（三次 move 全空），无害且免费——所以无条件写 `std::swap(ptr) + std::swap(deleter)` 两端通吃。
 - `delete t_` 不会置空指针（悬空地址还在）；`delete nullptr` 是安全 no-op 不用判空。
 (2026-08-31)
+### Q: shy_ptr.h 能跑通 cppreference shared_ptr 页面那两个 demo 吗？
+- 跑不通，且最致命的问题不是缺 API，而是**控制块存活条件判错**：`ShyPtrBase::expired()` 返回 `cb_cnt==0`（shy_ptr.h:28），而控制块 `base_` 的正确销毁条件是 **强引用与弱引用都为 0**（`count_==0 && cb_cnt==0`）。正常共享场景没有 weak（cb_cnt 恒 0），导致**任何一个 ShyPtr 析构都会删掉共享的控制块**，别的副本还在用 → 两个副本共享即崩溃（UBSan 实测 SIGTRAP，b 先析构删 base_、a 再摸已释放内存）。WeakPtr 析构同理反向错：弱引用清零但强引用活着时也会提前删 base_。
+- 模板成员函数惰性实例化掩盖了一批**跨类访问 private** 的编译错：`WeakPtr::operator=(const ShyPtr<T>&)` 摸 `ShyPtr::base_`（无 friend，shy_ptr.h:127）、`ShyPtr(const WeakPtr<T>&)` 摸 `WeakPtr::base_`——只有用到对应成员才炸，和 Uniqlo 那次经验一模一样。
+- 其它 API 层挡路：`get()`/`use_count()` 非 const（demo 的 print 收 const& 就编译错）；`lock()` 返回 `ShyPtr<T>&` 绑临时对象（悬垂）；无 `operator*`/`operator->`/`operator bool`；copy/move assign 不放旧引用（泄漏）且漏 `return *this`；对象删除 `count_--; if==0` 分两步，多线程可能双重 delete，应 `fetch_sub(1)==1`。
+- 修好上述后 demo 还有差距：缺 make_shared；控制块拿 `Base*` 直接 delete（非虚析构下不会调 `~Derived`，输出与 std 不同）；enable_shared_from_this + alias 构造那个 demo 更远。
+(2026-09-04 16:56)
 <!-- 以下继续记录 -->
