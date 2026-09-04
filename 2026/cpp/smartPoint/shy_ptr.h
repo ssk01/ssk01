@@ -1,17 +1,23 @@
 #include <atomic>
+#include <type_traits>
 #include <utility>
 using namespace std;
 
+// 内部默认 deleter（等价 std::default_delete，避免引 <memory>）
+template<typename Y>
+struct ShyDefaultDelete {
+    void operator()(Y* p) const { delete p; }
+};
+
+// 控制块基类：只管 T* 指针 + 强/弱两个原子计数 + 虚函数钩子。
+// 对 std::shared_ptr 的 __shared_count/__shared_weak_count（指针留在基类便于 get()，
+// 官方是放派生里并在 shared_ptr 里另存一份指针，等做 alias 时再对齐）。
 template<typename T>
 class ShyPtrBase {
 public:
-    template<typename Y>
-    ShyPtrBase(Y* ptr)
-        : ptr_(ptr),
-          deleter_([](T* p) { delete static_cast<Y*>(p); }),
-          count_(1), cb_cnt(0) {
-
-    }
+    ShyPtrBase(T* ptr) : ptr_(ptr), count_(1), cb_cnt(0) {}
+    virtual ~ShyPtrBase() = default;
+    virtual void dispose() = 0;   // 强计数归零时删对象（官方 __on_zero_shared）
     int use_count() {
         return count_;
     }
@@ -21,7 +27,7 @@ public:
     void reset() {
         count_--;
         if (count_ == 0) {
-            deleter_(ptr_);
+            dispose();
         }
     };
     void increase_count() {
@@ -39,9 +45,40 @@ public:
  
 private:
     T* ptr_;
-    void (*deleter_)(T*);
     atomic_int count_;
     atomic_int cb_cnt;
+};
+
+// 分派式 deleter 持有者：空且非 final 的类型当私有基类（继承式 EBO，0 字节），
+// 否则存成员。对 libc++ 旧版 __compressed_pair_elem 的思路。
+template<typename D, bool = is_empty<D>::value && !is_final<D>::value>
+class ShyDelHolder {
+public:
+    ShyDelHolder(D d) : del_(std::move(d)) {}
+    D& deleter() { return del_; }
+private:
+    D del_;
+};
+
+template<typename D>
+class ShyDelHolder<D, true> : private D {
+public:
+    ShyDelHolder(D d) : D(std::move(d)) {}
+    D& deleter() { return *this; }
+};
+
+// 具体控制块：按 (T, Y, Deleter) 模板化，deleter 按值存。
+// 对 std::shared_ptr 的 __shared_ptr_pointer<_Tp,_Dp,_Alloc>（去掉 allocator）。
+template<typename T, typename Y, typename D>
+class ShyPtrCtl : public ShyPtrBase<T>, private ShyDelHolder<D> {
+public:
+    ShyPtrCtl(Y* ptr, D d)
+        : ShyPtrBase<T>(ptr), ShyDelHolder<D>(std::move(d)), raw_(ptr) {}
+    void dispose() override {
+        this->deleter()(raw_);
+    }
+private:
+    Y* raw_;     // 构造时原始类型指针，dispose 时按它调 deleter
 };
 
 
@@ -54,7 +91,11 @@ class ShyPtr  {
 public:
     ShyPtr() :base_(nullptr) {}
     template<typename Y>
-    ShyPtr(Y* ptr) : base_(new ShyPtrBase<T>(ptr)){
+    ShyPtr(Y* ptr) : base_(new ShyPtrCtl<T, Y, ShyDefaultDelete<Y>>(ptr, ShyDefaultDelete<Y>())) {
+
+    }
+    template<typename Y, typename D>
+    ShyPtr(Y* ptr, D d) : base_(new ShyPtrCtl<T, Y, D>(ptr, std::move(d))) {
 
     }
     ~ShyPtr() {
@@ -100,10 +141,26 @@ public:
     void reset() {
         release();
     }
+    template<typename Y>
+    void reset(Y* ptr) {
+        release();
+        base_ = new ShyPtrCtl<T, Y, ShyDefaultDelete<Y>>(ptr, ShyDefaultDelete<Y>());
+    }
+
+    operator bool() const {
+        return get() != nullptr;
+    }
+    T* operator->() const {
+        return get();
+    }
 
     T* get() const {
         if (!base_)  return nullptr;
         return base_->get();
+    }
+
+    bool  unique() const {
+        return use_count() == 1;
     }
 
 private:
@@ -125,7 +182,7 @@ class WeakPtr  {
 public:
     WeakPtr() :base_(nullptr) {}
     template<typename Y>
-    WeakPtr(Y* ptr) : base_(new ShyPtrBase<T>(ptr)){
+    WeakPtr(Y* ptr) : base_(new ShyPtrCtl<T, Y, ShyDefaultDelete<Y>>(ptr, ShyDefaultDelete<Y>())){
         base_->increaseCb();
     }
     ~WeakPtr() {
@@ -200,3 +257,7 @@ private:
     }
     ShyPtrBase<T> *base_;
 };
+template <typename T, typename... Args>
+ShyPtr<T> make_shyptr(Args &&...args) {
+    return ShyPtr<T>(new T(std::forward<Args>(args)...));
+}
