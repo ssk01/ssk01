@@ -25,7 +25,7 @@ public:
         count_++;
     }
     bool expired() {
-        return cb_cnt == 0;
+        return cb_cnt == 0 && count_ == 0;
     }
     void releaseCb() {
         cb_cnt--;
@@ -46,6 +46,7 @@ class WeakPtr;
 
 template<typename T>
 class ShyPtr  {
+    friend class WeakPtr<T>;
 public:
     ShyPtr() :base_(nullptr) {}
     ShyPtr(T* ptr) : base_(new ShyPtrBase<T>(ptr)){
@@ -82,7 +83,7 @@ public:
         base_ = ptr.base_;
         ptr.base_ = nullptr;
     }
-    int use_count() {
+    int use_count() const {
         if (!base_) return 0;
         return base_->use_count();
     }
@@ -91,7 +92,7 @@ public:
         base_ = nullptr;   
     }
 
-    T* get() {
+    T* get() const {
         if (!base_)  return nullptr;
         return base_->get();
     }
@@ -102,6 +103,7 @@ private:
 
 template<typename T>
 class WeakPtr  {
+    friend class ShyPtr<T>;
 public:
     WeakPtr() :base_(nullptr) {}
     WeakPtr(T* ptr) : base_(new ShyPtrBase<T>(ptr)){
