@@ -39,4 +39,11 @@
 - 其它 API 层挡路：`get()`/`use_count()` 非 const（demo 的 print 收 const& 就编译错）；`lock()` 返回 `ShyPtr<T>&` 绑临时对象（悬垂）；无 `operator*`/`operator->`/`operator bool`；copy/move assign 不放旧引用（泄漏）且漏 `return *this`；对象删除 `count_--; if==0` 分两步，多线程可能双重 delete，应 `fetch_sub(1)==1`。
 - 修好上述后 demo 还有差距：缺 make_shared；控制块拿 `Base*` 直接 delete（非虚析构下不会调 `~Derived`，输出与 std 不同）；enable_shared_from_this + alias 构造那个 demo 更远。
 (2026-09-04 16:56)
+### Q: 为什么 std::shared_ptr 能"记得"真实类型并正确析构，而 `Base* p=new Derived; delete p;` 不行？非虚析构下 delete 基类指针本来就不该调 ~Derived 吧？
+- 对，第二点判断正确：`delete` 选析构**只认静态类型 + 是否虚**。`~Base` 虚 → vtable 分派到 ~Derived；非虚 → 编译期定死调 ~Base，不递归。所以 probe 只打 `Base::~Base` 是标准行为，不是 bug。
+- shared_ptr "记得住"的关键是**记忆发生在构造期而非 delete 期**：`shared_ptr<Base> sp(new Derived)` 走模板构造 `template<class Y> shared_ptr(Y*)`，Y=Derived 在构造点是已知的；控制块存的是**类型擦除的 deleter**（把 p 当 Derived 保管），计数归零时按 Derived 删。`delete (Derived*)` 的静态类型本来就是 Derived，不需要 vtable，~Derived 跑完析构链自动调 ~Base。这就是 cppreference 敢写 "non-virtual destructor is OK here" 的原因。
+- 普通写法在 new 的瞬间类型就坍缩成 Base* 了，delete 期信息不存在；shared_ptr 则是在信息还没丢的构造点把它抓进控制块。
+- ShyPtr 丢信息的精确位置：`ShyPtr(T* ptr): base_(new ShyPtrBase<T>(ptr))` 里 T=Base，`new Derived` 进构造瞬间被隐式转成 Base*，入口即丢；`delete (T*)ptr_` 只能按 Base 删。修法二选一：① demo 里 ~Base 改虚（现有 delete Base* 也能靠 vtable 分派）；② 照 std 做类型擦除 deleter（demo 保持非虚也对）。虚析构与类型擦除是达成同一目标的两种独立手段。
+- 追问"~Base 非虚时，~Derived 正常执行后会自动调 ~Base 吗"：**会，且与虚无关**。析构链是编译器保证的——~Derived 函数体跑完自动析构基类子对象调 ~Base。虚只决定"从基类指针 delete 时能不能调到 ~Derived"这一环；只要 ~Derived 被调到，~Base 必然跟着跑（虚析构场景里 ~Base 也正是靠这条链被自动调的）。所以类型擦除后按 Derived delete，输出会是 ~Derived 再 ~Base。
+(2026-09-04 17:20)
 <!-- 以下继续记录 -->
