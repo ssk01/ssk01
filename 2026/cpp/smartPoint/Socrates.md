@@ -54,4 +54,15 @@
 - 核心：const 只管**句柄自身**（`base_` 指针成员不可改写），不传给被管对象或控制块——ShyPtr 等价于 `T* const` 而非 `const T*`。拷贝 const ShyPtr 合法：拷贝不改自身成员，只是把**堆上控制块**计数 +1，计数变化发生在指针所指的堆对象而非 const 对象内。
 - 由此推 API 形状：拷贝构造/赋值必须收 `const ShyPtr&`（原实现 `ShyPtr(ShyPtr&)` 导致 const 左值拷不进去，即 todo 根源）；`get()/use_count()/operator->` 等只读观察者标 const；`reset()/operator=` 改写 base_ 故必须非 const；移动构造收 `ShyPtr&&`（偷指针并置空本身就是改写）。demo1 的 `print(ShyPtr<Base> const& sp)` 能过依赖观察者标 const。
 (2026-09-04 17:36)
+### Q: 那些 const/assign/lock bug 之前就在，为什么 cppreference demo 跑通了却没测出来？
+- cppreference 的 example 是**正向功能演示**，不是测试：只走 happy path、无断言、不看析构次数/计数平衡/泄漏。demo1（多线程共享）从没做过赋值、自赋值、const 对象拷贝、reset 后单所有者回收、WeakPtr::lock——所以每个 bug 的触发场景它都没覆盖（赋值漏 return 需用到返回值；lock 悬垂需调用 lock；reset 泄漏需"单所有者 reset 后不再析构"，demo 里 reset 时线程还持有着）。
+- 放大因素一：**模板成员惰性实例化**——operator= 漏 return、lock 悬垂这类错，只要该成员从没被调用，编译器就不为其生成代码，连 -Wall -Wreturn-type 都沉默，坏代码根本没被编出来。放大因素二：demo 只看打印输出，没有 alive 计数 + sanitizer 这类校验。
+- 教训：抓这种 bug 靠**对抗性单测**——显式调用每个特殊成员（拷贝/移动构造、拷贝/移动赋值、自赋值、const 拷贝、重复 reset、weak lock），配 alive 计数 + UBSan/ASan，而不是跑功能演示。这也是为什么修完要补 probe_const 这种穷举 probe。
+(2026-09-04 17:45)
+### Q: 官方的 std::shared_ptr 控制块里 deleter 到底怎么存的？（libc++ 源码）
+- deleter 不是"函数指针 + 无状态 lambda"能装的（运行期值无状态装不下、捕获后又不能转函数指针）——它是**一个有值的对象**，被**按值存进具体控制块**，控制块按 (指针类型, deleter, allocator) **模板化**，靠继承做类型擦除。
+- libc++ 结构（本机 __memory/shared_count.h + __memory/shared_ptr.h）：基类 `__shared_count` 只放强计数 + 纯虚 `__on_zero_shared()`；`__shared_weak_count` 再加弱计数 + 纯虚 `__on_zero_shared_weak()`；具体块 `__shared_ptr_pointer<_Tp,_Dp,_Alloc> : __shared_weak_count`，成员 `_LIBCPP_COMPRESSED_TRIPLE(__ptr_, __deleter_, __alloc_)`（EBO 压成员）。shared_ptr 只持 `__shared_count*`，故 Y/D/Alloc 进不了基类类型。
+- 生命周期：强计数归零 `__release_shared()` 调虚 `__on_zero_shared()` → `__deleter_(__ptr_); __deleter_.~_Dp();`（用完即析构 deleter，配合 allocator 走 placement-delete 释放块，不二次调 dtor）；弱也归零 → `__on_zero_shared_weak()` 用 allocator 释放内存。强计数用原子 decrement，等于 -1 触发（官方计数从 0 往 -1 走，use_count = 值+1）。
+- 我们的简化版对应：`ShyPtrBase<T>`（保留 ptr_/get，纯虚 dispose）↔ 官方计数基类；`ShyPtrCtl<T,Y,D>`（按值存 D del_ + Y* raw_，dispose 调 del_(raw_)）↔ __shared_ptr_pointer。没照抄的两点：官方把指针放派生、shared_ptr 另存一份（为 alias/数组），我们用 delete base_ 而非 allocator placement-delete，所以不提前手动析构 deleter、留给派生 dtor。
+(2026-09-04 17:59)
 <!-- 以下继续记录 -->
