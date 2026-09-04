@@ -8,5 +8,6 @@
 - 总结实现过程到文档、看看还有哪些 demo 跑不通、commit；剩下的 feature 后续再处理 [decision]
 - 让我看 shy_ptr.h 能不能跑通 cppreference shared_ptr 页面的 demo；有问题先别修，先汇报，让我决定怎么处理 [decision]
 - a、b 修好后先 commit 一版（我自己改的 friend/const/expired 判定）；下一步做类型擦除：构造时按真实类型 Y 记录 deleter，delete 按 Y 走，对齐 std，让 ~Base 非虚的 demo 也能正确析构 [decision]
-(2026-09-04 17:20)
+- 类型擦除做完后：拷贝构造/赋值改收 const&、观察者标 const、assign 补释放旧引用与 return *this、lock 改按值返回，一次性 commit [decision]
+(2026-09-04 17:28)
 <!-- 以下继续记录 -->

@@ -45,5 +45,13 @@
 - 普通写法在 new 的瞬间类型就坍缩成 Base* 了，delete 期信息不存在；shared_ptr 则是在信息还没丢的构造点把它抓进控制块。
 - ShyPtr 丢信息的精确位置：`ShyPtr(T* ptr): base_(new ShyPtrBase<T>(ptr))` 里 T=Base，`new Derived` 进构造瞬间被隐式转成 Base*，入口即丢；`delete (T*)ptr_` 只能按 Base 删。修法二选一：① demo 里 ~Base 改虚（现有 delete Base* 也能靠 vtable 分派）；② 照 std 做类型擦除 deleter（demo 保持非虚也对）。虚析构与类型擦除是达成同一目标的两种独立手段。
 - 追问"~Base 非虚时，~Derived 正常执行后会自动调 ~Base 吗"：**会，且与虚无关**。析构链是编译器保证的——~Derived 函数体跑完自动析构基类子对象调 ~Base。虚只决定"从基类指针 delete 时能不能调到 ~Derived"这一环；只要 ~Derived 被调到，~Base 必然跟着跑（虚析构场景里 ~Base 也正是靠这条链被自动调的）。所以类型擦除后按 Derived delete，输出会是 ~Derived 再 ~Base。
-(2026-09-04 17:20)
+- 追问"模板把编译期类型绑进 delete 的 lambda，为什么叫类型擦除"：擦除的是**存储结构里的 Y**，不是删除代码。判定标准是"控制块类型里还找得到 Y 吗"——现在 `ShyPtrBase<T>` 是单一固定类型，成员只是 `void(*)(T*)` 函数指针，Y 只出现在构造点（按 Y 实例化出不同 lambda 塞进指针值），运行期 Y 从数据中消失、只剩不透明指针 → 类型转成行为再丢弃，即擦除。**为什么必须擦**：若控制块也带 Y（如 ShyPtrBase<T,Y>），`ShyPtr<Base>(new Derived)` 与 `new Base` 会得到不同类型控制块，而多个 `ShyPtr<Base>` 拷贝要共享同一个控制块对象——只有 Y 不进类型、T 固定，才能让同 T 不同 Y 的对象落到同一种控制块上。擦掉的是 Y（构造实参类型），T 仍在（ptr_/get 都是 T*），std 同样保留 T 只擦 deleter 类型。同一思想：std::function、shared_ptr 的 deleter/allocator、std::thread、std::any、虚函数 vtable。
+(2026-09-04 17:28)
+### Q: std::thread 的 callable 不是具体类型吗？跟类型擦除什么关系？为什么 std::thread 能把任意 callable+任意参数都存下来？
+- `std::thread` 类本身**不是模板**（`class thread`），lambda/函数指针/仿函数构造出来都是同一类型——说明 callable 具体类型在存储层被擦掉了。擦除点在其模板构造函数 `template<class F, class... Args> thread(F&&, Args&&...)`：F 在入口已知并 decay（去引用/顶层cv、函数转函数指针、数组转指针，故传引用需显式 std::ref），随后把 F+args 装箱进堆上 `thread_data_impl<F,Args...>`，经基类虚函数 run() 调用。
+- 为什么必须擦：底层线程入口签名固定（如 `void*(*)(void*)`），任意 callable+参数无法直接塞进去，只能装箱成统一形态+统一入口交给 OS。这和 deleter 的擦除是同一模式——类型在构造边界消费成统一运行时形态（虚函数或函数指针），存储层不再知道 F。虚函数是 C++ 内置擦除手段，deleter 用的函数指针是另一种形态；std::function 同理。
+### Q: `const ShyPtr<T>`（todo：常量引用问题）该怎么解？拷贝 const 对象时引用计数不是会变吗？
+- 核心：const 只管**句柄自身**（`base_` 指针成员不可改写），不传给被管对象或控制块——ShyPtr 等价于 `T* const` 而非 `const T*`。拷贝 const ShyPtr 合法：拷贝不改自身成员，只是把**堆上控制块**计数 +1，计数变化发生在指针所指的堆对象而非 const 对象内。
+- 由此推 API 形状：拷贝构造/赋值必须收 `const ShyPtr&`（原实现 `ShyPtr(ShyPtr&)` 导致 const 左值拷不进去，即 todo 根源）；`get()/use_count()/operator->` 等只读观察者标 const；`reset()/operator=` 改写 base_ 故必须非 const；移动构造收 `ShyPtr&&`（偷指针并置空本身就是改写）。demo1 的 `print(ShyPtr<Base> const& sp)` 能过依赖观察者标 const。
+(2026-09-04 17:36)
 <!-- 以下继续记录 -->
