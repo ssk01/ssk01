@@ -1,5 +1,7 @@
 # v9-op-registry — op 注册系统 + 队列 + 稀疏张量 + 查找表
 
+后续 [v10 primitive cache](../v10-primitive-cache/README.md) 直接复用本版框架，通过 registry 接入二维 `MatMul2D` 和 LIBXSMM JIT 代码缓存。本次对 v9 的四处适配及完整调用链见[阅读导览](../READING-GUIDE.md)。
+
 > 对应 TF commit 1 的 op 注册地基 + 数据管线机制 + 稀疏张量 + 查找表。
 > v0-v8 用枚举 switch 实现 op，v9 改为**注册表驱动** (op 即数据)，并加入
 > 搜广推/LLM 训练的核心数据结构。

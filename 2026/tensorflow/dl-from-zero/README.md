@@ -1,5 +1,7 @@
 # dl-from-zero — 从 0 到 1 复刻 TensorFlow
 
+本次 JIT / primitive cache 功能从[阅读导览](READING-GUIDE.md)开始：项目结构、改动清单、代码调用链和运行对照。
+
 > 目标不是实现一个"能用"的深度学习框架, 而是**复盘 TF 的架构概念**:
 > 每一版解决一个 TF 里的核心设计问题, 用最小代码讲清概念, 抛弃 323 个 kernel 那样的细节。
 
@@ -15,10 +17,13 @@ dl-from-zero/
 ├── v5-opt/          图优化: CSE + 常量折叠(对应 optimizer_cse.cc + constant_folding.cc)
 ├── v6-quant/        量化/低精度推理: int8 (对应首个量化 commit ca4e053aa52 + 论文 §5)
 ├── v7-parallel/     执行队列(op 并发执行) + 设备放置(simple_placer) + SME2/AMX + Metal (对应 commit 1 的 executor/threadpool/simple_placer/GPU)
-└── v8-graph-partition/ 图分区 + Send/Recv (跨设备数据传输) + rendezvous (对应 commit 1 的 graph_partition.cc + IntraProcessRendezvous)
+├── v8-graph-partition/ 图分区 + Send/Recv (跨设备数据传输) + rendezvous (对应 commit 1 的 graph_partition.cc + IntraProcessRendezvous)
+├── v9-op-registry/  op/kernel 注册与分发
+├── v10-primitive-cache/ 二维 MatMul + primitive 对象 + JIT 代码缓存
+└── experiments/     JIT MatMul 主线验证及早期探索（见实验索引）
 ```
 
-每版 = 上一版 + 一个新概念。建议按顺序读。
+每版 = 上一版 + 一个新概念。建议按顺序读。v10 直接复用 v9 的框架代码；关注本次改动可从[阅读导览](READING-GUIDE.md)进入，无需先读完历史版本。
 
 ---
 
@@ -75,6 +80,18 @@ dl-from-zero/
 
 ---
 
+## v8～v10 — 从跨设备执行到代码复用
+
+- [v8-graph-partition](v8-graph-partition/README.md)：图分区、Send/Recv 与 rendezvous，连接跨设备执行。
+- [v9-op-registry](v9-op-registry/README.md)：把 op 定义与 kernel 实现放进 registry，执行器按类型和设备分发。
+- [v10-primitive-cache](v10-primitive-cache/README.md)：在 registry 下接入独立 `MatMul2D`，用描述查找 primitive，复用 LIBXSMM 生成的代码；自己实现 LRU、代码所有权和真实生成统计。缓存不保存输入、权重或输出。
+
+v10 的证据先来自[独立 MatMul 实验](experiments/jit-matmul/README.md)，再测完整 Session 请求。FP32 主 case 的生成 kernel 比 Accelerate 快约 13%；TF 混合请求容量 2→8 的总耗时约 23.185→9.747 ms，热缓存与 Accelerate 基本持平。当前仅验证 M4 Pro、单请求线程、二维前向；BF16、训练和并发未完成。
+
+阅读入口：[改动与代码导览](READING-GUIDE.md) · [四阶段规划](primitive-cache-plan.md) · [实验索引](experiments/README.md)。
+
+---
+
 ## 演进脉络(为什么这么排)
 
 ```
@@ -86,10 +103,13 @@ v4  反向也变成图                  → 梯度子图统一进图, prune 自�
 v5  执行前先优化图                → CSE/常量折叠, 编译期消除浪费 (三件套: DCE/CSE/折叠)
 v6  推理用低精度                  → int8 量化, 带宽/算力降 4x, 精度几乎无损
 v7  并发执行 + 多设备            → executor/threadpool + simple_placer + AMX/Metal
+v8  跨设备图分区                  → Send/Recv + rendezvous
+v9  op/kernel 注册                → 定义、实现与执行分发解耦
+v10 primitive cache              → 按描述复用 JIT 代码，减少重复准备
 ```
 
 v4 反过来验证了 TF 最核心的设计直觉:**训练和推理的差别, 从"运行时标记"变成"图结构上的可达性"**——这就是 `gradients.py` 把梯度建成子图的意义。v5/v6 则覆盖了 TF 推理落地的两条主线: 编译期消除浪费(图优化) + 低精度计算(量化)。
 
 ## 运行
 
-每版独立 `make`(C++)或 `make pybind && python3 demo*.py`(Python), 详见各版本 README。
+历史版本按各自 README 使用 `make` 或 Python 入口；v10 使用 CMake/CTest，构建与容量对照命令见 [v10 README](v10-primitive-cache/README.md#复现与验证)。
