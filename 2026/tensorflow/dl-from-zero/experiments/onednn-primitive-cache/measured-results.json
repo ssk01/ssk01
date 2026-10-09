@@ -1,0 +1,481 @@
+{
+  "platform": "macOS-26.6.1-x86_64-i386-64bit-Mach-O",
+  "k": 256,
+  "n": 256,
+  "repeats": 5,
+  "rounds": 25,
+  "performance": {
+    "fixed": [
+      {
+        "requests": 200,
+        "pd_ms": 0.162086,
+        "primitive_ms": 0.069335,
+        "prepare_ms": 0.231421,
+        "execute_ms": 45.733748,
+        "total_ms": 46.002249,
+        "p50_us": 227.333,
+        "p95_us": 258.042,
+        "max_error": 0.0,
+        "checksum": -249.5625,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=2 mode=fixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.169953,
+        "primitive_ms": 0.068168,
+        "prepare_ms": 0.238121,
+        "execute_ms": 47.965257,
+        "total_ms": 48.239618,
+        "p50_us": 238.208,
+        "p95_us": 258.833,
+        "max_error": 0.0,
+        "checksum": -249.5625,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=2 mode=fixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.159258,
+        "primitive_ms": 0.063835,
+        "prepare_ms": 0.223093,
+        "execute_ms": 47.36062,
+        "total_ms": 47.617838,
+        "p50_us": 235.334,
+        "p95_us": 252.333,
+        "max_error": 0.0,
+        "checksum": -249.5625,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=2 mode=fixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.132631,
+        "primitive_ms": 0.056001,
+        "prepare_ms": 0.188632,
+        "execute_ms": 45.989574,
+        "total_ms": 46.206541,
+        "p50_us": 230.291,
+        "p95_us": 246.833,
+        "max_error": 0.0,
+        "checksum": -249.5625,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=2 mode=fixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.134914,
+        "primitive_ms": 0.059045,
+        "prepare_ms": 0.193959,
+        "execute_ms": 46.247447,
+        "total_ms": 46.469028,
+        "p50_us": 230.709,
+        "p95_us": 245.875,
+        "max_error": 0.0,
+        "checksum": -249.5625,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=2 mode=fixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      }
+    ],
+    "mixed-small": [
+      {
+        "requests": 200,
+        "pd_ms": 0.802328,
+        "primitive_ms": 0.194586,
+        "prepare_ms": 0.996914,
+        "execute_ms": 31.250751,
+        "total_ms": 32.287413,
+        "p50_us": 160.625,
+        "p95_us": 276.791,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=2 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.765754,
+        "primitive_ms": 0.202411,
+        "prepare_ms": 0.968165,
+        "execute_ms": 31.368958,
+        "total_ms": 32.376253,
+        "p50_us": 153.541,
+        "p95_us": 279.208,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=2 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.870535,
+        "primitive_ms": 0.23408,
+        "prepare_ms": 1.104615,
+        "execute_ms": 33.295663,
+        "total_ms": 34.45208,
+        "p50_us": 164.417,
+        "p95_us": 288.541,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=2 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.88796,
+        "primitive_ms": 0.214914,
+        "prepare_ms": 1.102874,
+        "execute_ms": 32.785122,
+        "total_ms": 33.940001,
+        "p50_us": 167.708,
+        "p95_us": 283.375,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=2 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.754788,
+        "primitive_ms": 0.189997,
+        "prepare_ms": 0.944785,
+        "execute_ms": 31.196419,
+        "total_ms": 32.181122,
+        "p50_us": 149.292,
+        "p95_us": 276.792,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=2 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      }
+    ],
+    "mixed-large": [
+      {
+        "requests": 200,
+        "pd_ms": 0.13829,
+        "primitive_ms": 0.058372,
+        "prepare_ms": 0.196662,
+        "execute_ms": 31.197036,
+        "total_ms": 31.42004,
+        "p50_us": 170.792,
+        "p95_us": 273.791,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=256 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.13329,
+        "primitive_ms": 0.056502,
+        "prepare_ms": 0.189792,
+        "execute_ms": 31.547334,
+        "total_ms": 31.766535,
+        "p50_us": 151.916,
+        "p95_us": 277.292,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=256 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.181125,
+        "primitive_ms": 0.068711,
+        "prepare_ms": 0.249836,
+        "execute_ms": 32.323081,
+        "total_ms": 32.61059,
+        "p50_us": 156.583,
+        "p95_us": 282.542,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=256 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.147038,
+        "primitive_ms": 0.062593,
+        "prepare_ms": 0.209631,
+        "execute_ms": 32.08199,
+        "total_ms": 32.319041,
+        "p50_us": 154.791,
+        "p95_us": 275.375,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=256 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.126336,
+        "primitive_ms": 0.055959,
+        "prepare_ms": 0.182295,
+        "execute_ms": 31.494212,
+        "total_ms": 31.701834,
+        "p50_us": 146.375,
+        "p95_us": 276.5,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=256 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      }
+    ],
+    "mixed-off": [
+      {
+        "requests": 200,
+        "pd_ms": 0.749748,
+        "primitive_ms": 0.113957,
+        "prepare_ms": 0.863705,
+        "execute_ms": 31.019169,
+        "total_ms": 31.935667,
+        "p50_us": 149.458,
+        "p95_us": 278.792,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=0 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.752827,
+        "primitive_ms": 0.11629,
+        "prepare_ms": 0.869117,
+        "execute_ms": 30.789295,
+        "total_ms": 31.714993,
+        "p50_us": 160.917,
+        "p95_us": 271.584,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=0 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.832414,
+        "primitive_ms": 0.118128,
+        "prepare_ms": 0.950542,
+        "execute_ms": 32.454583,
+        "total_ms": 33.461836,
+        "p50_us": 178.708,
+        "p95_us": 286.583,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=0 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.807827,
+        "primitive_ms": 0.121876,
+        "prepare_ms": 0.929703,
+        "execute_ms": 32.85866,
+        "total_ms": 33.846742,
+        "p50_us": 162.958,
+        "p95_us": 286.666,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=0 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      },
+      {
+        "requests": 200,
+        "pd_ms": 0.791629,
+        "primitive_ms": 0.121333,
+        "prepare_ms": 0.912962,
+        "execute_ms": 32.169426,
+        "total_ms": 33.143923,
+        "p50_us": 163.917,
+        "p95_us": 282.292,
+        "max_error": 0.0,
+        "checksum": -257.21875,
+        "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=0 mode=mixed",
+        "implementations": [
+          "gemm:jit:f32"
+        ]
+      }
+    ]
+  },
+  "diagnostics": {
+    "fixed": {
+      "requests": 200,
+      "pd_ms": 0.162076,
+      "primitive_ms": 0.245887,
+      "prepare_ms": 0.407963,
+      "execute_ms": 46.8447,
+      "total_ms": 47.28779,
+      "p50_us": 235.417,
+      "p95_us": 247.375,
+      "max_error": 0.0,
+      "checksum": -249.5625,
+      "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=2 mode=fixed",
+      "implementations": [
+        "gemm:jit:f32"
+      ],
+      "diagnostic": {
+        "hits": 200,
+        "misses": 0,
+        "executions": 200,
+        "logged_create_ms": 0.06323238,
+        "logged_exec_ms": 46.47656
+      }
+    },
+    "mixed-small": {
+      "requests": 200,
+      "pd_ms": 0.992326,
+      "primitive_ms": 1.028714,
+      "prepare_ms": 2.02104,
+      "execute_ms": 31.854711,
+      "total_ms": 33.92958,
+      "p50_us": 163.459,
+      "p95_us": 286.166,
+      "max_error": 0.0,
+      "checksum": -257.21875,
+      "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=2 mode=mixed",
+      "implementations": [
+        "gemm:jit:f32"
+      ],
+      "diagnostic": {
+        "hits": 0,
+        "misses": 200,
+        "executions": 200,
+        "logged_create_ms": 0.2641599019999992,
+        "logged_exec_ms": 31.49462940000001
+      }
+    },
+    "mixed-large": {
+      "requests": 200,
+      "pd_ms": 0.198374,
+      "primitive_ms": 0.260957,
+      "prepare_ms": 0.459331,
+      "execute_ms": 32.509466,
+      "total_ms": 33.008577,
+      "p50_us": 172.0,
+      "p95_us": 280.375,
+      "max_error": 0.0,
+      "checksum": -257.21875,
+      "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=256 mode=mixed",
+      "implementations": [
+        "gemm:jit:f32"
+      ],
+      "diagnostic": {
+        "hits": 200,
+        "misses": 0,
+        "executions": 200,
+        "logged_create_ms": 0.07666010200000001,
+        "logged_exec_ms": 32.14014189999998
+      }
+    },
+    "mixed-off": {
+      "requests": 200,
+      "pd_ms": 0.952032,
+      "primitive_ms": 0.842175,
+      "prepare_ms": 1.794207,
+      "execute_ms": 31.956074,
+      "total_ms": 33.82562,
+      "p50_us": 168.25,
+      "p95_us": 286.959,
+      "max_error": 0.0,
+      "checksum": -257.21875,
+      "config": "CONFIG version=3.9.1 hash=80a3a8e745d2f0186e674b0af9332fd6e074c94f cpu_runtime=1 capacity=0 mode=mixed",
+      "implementations": [
+        "gemm:jit:f32"
+      ],
+      "diagnostic": {
+        "hits": 0,
+        "misses": 200,
+        "executions": 200,
+        "logged_create_ms": 0.130859276,
+        "logged_exec_ms": 31.59130860000001
+      }
+    }
+  },
+  "median": {
+    "fixed": {
+      "requests": 200,
+      "pd_ms": 0.159258,
+      "primitive_ms": 0.063835,
+      "prepare_ms": 0.223093,
+      "execute_ms": 46.247447,
+      "total_ms": 46.469028,
+      "p50_us": 230.709,
+      "p95_us": 252.333,
+      "max_error": 0.0,
+      "checksum": -249.5625
+    },
+    "mixed-small": {
+      "requests": 200,
+      "pd_ms": 0.802328,
+      "primitive_ms": 0.202411,
+      "prepare_ms": 0.996914,
+      "execute_ms": 31.368958,
+      "total_ms": 32.376253,
+      "p50_us": 160.625,
+      "p95_us": 279.208,
+      "max_error": 0.0,
+      "checksum": -257.21875
+    },
+    "mixed-large": {
+      "requests": 200,
+      "pd_ms": 0.13829,
+      "primitive_ms": 0.058372,
+      "prepare_ms": 0.196662,
+      "execute_ms": 31.547334,
+      "total_ms": 31.766535,
+      "p50_us": 154.791,
+      "p95_us": 276.5,
+      "max_error": 0.0,
+      "checksum": -257.21875
+    },
+    "mixed-off": {
+      "requests": 200,
+      "pd_ms": 0.791629,
+      "primitive_ms": 0.118128,
+      "prepare_ms": 0.912962,
+      "execute_ms": 32.169426,
+      "total_ms": 33.143923,
+      "p50_us": 162.958,
+      "p95_us": 282.292,
+      "max_error": 0.0,
+      "checksum": -257.21875
+    }
+  }
+}

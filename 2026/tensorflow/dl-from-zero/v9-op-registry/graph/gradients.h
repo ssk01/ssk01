@@ -1,5 +1,6 @@
 #pragma once
 #include <deque>
+#include <stdexcept>
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
@@ -76,6 +77,8 @@ public:
             case LOG:
                 add_contrib(n->inputs[0], g_.mul(g, g_.recip(n->inputs[0])));
                 break;
+            case MATMUL2D:
+                throw std::runtime_error("MatMul2D gradients are not implemented");
             case MATMUL:
                 add_contrib(n->inputs[0], g_.matmul_grad_a(g, n->inputs[1]));
                 add_contrib(n->inputs[1], g_.matmul_grad_b(g, n->inputs[0]));
