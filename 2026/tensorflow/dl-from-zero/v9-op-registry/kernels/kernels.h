@@ -34,7 +34,7 @@ inline void forward(Node* node, RunState& st) {
     static const char* type_names[] = {
         "PLACEHOLDER", "VARIABLE", "CONST", "ADD", "MUL", "SUB", "SQUARE",
         "MEAN", "MATMUL", "SIGMOID", "LOG", "RECIP", "REDUCE_SUM", "SGD_STEP",
-        "MEAN_GRAD", "MATMUL_GRAD_A", "MATMUL_GRAD_B", "SEND", "RECV"
+        "MEAN_GRAD", "MATMUL_GRAD_A", "MATMUL_GRAD_B", "SEND", "RECV", "MatMul2D"
     };
 
     const char* op_name = type_names[node->type];
@@ -79,6 +79,9 @@ inline void forward_legacy(Node* node, RunState& st) {
         break;
     case MEAN:
         st.out(node) = tensor_mean(st.out(node->inputs[0]));
+        break;
+    case MATMUL2D:
+        forward(node, st);
         break;
     case MATMUL: {
         const Tensor& A = st.out(node->inputs[0]);

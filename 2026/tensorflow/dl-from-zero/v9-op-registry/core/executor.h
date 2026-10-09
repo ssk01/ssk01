@@ -103,6 +103,7 @@ public:
     static bool IsCheap(const Node* n) {
         switch (n->type) {
         case MATMUL:
+        case MATMUL2D:
         case MATMUL_GRAD_A:
         case MATMUL_GRAD_B:
             return false;

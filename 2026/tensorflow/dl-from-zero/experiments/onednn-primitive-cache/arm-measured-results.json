@@ -1,0 +1,218 @@
+{
+  "timing_and_events": {
+    "shuffle": {
+      "2": {
+        "runs": [
+          {
+            "pd_ms": 0.195878,
+            "primitive_ms": 1.19492,
+            "execute_ms": 0.972832,
+            "total_ms": 2.39221
+          },
+          {
+            "pd_ms": 0.202119,
+            "primitive_ms": 1.10471,
+            "execute_ms": 0.870925,
+            "total_ms": 2.20408
+          },
+          {
+            "pd_ms": 0.193961,
+            "primitive_ms": 1.19029,
+            "execute_ms": 0.994216,
+            "total_ms": 2.40479
+          },
+          {
+            "pd_ms": 0.197215,
+            "primitive_ms": 1.23417,
+            "execute_ms": 1.02358,
+            "total_ms": 2.48292
+          },
+          {
+            "pd_ms": 0.208127,
+            "primitive_ms": 1.13605,
+            "execute_ms": 0.986127,
+            "total_ms": 2.35921
+          }
+        ],
+        "median": {
+          "pd_ms": 0.197215,
+          "primitive_ms": 1.19029,
+          "execute_ms": 0.986127,
+          "total_ms": 2.39221
+        },
+        "hits": 0,
+        "misses": 160,
+        "executions": 160
+      },
+      "256": {
+        "runs": [
+          {
+            "pd_ms": 0.065749,
+            "primitive_ms": 0.041211,
+            "execute_ms": 0.487383,
+            "total_ms": 0.611085
+          },
+          {
+            "pd_ms": 0.065463,
+            "primitive_ms": 0.037921,
+            "execute_ms": 0.478917,
+            "total_ms": 0.598883
+          },
+          {
+            "pd_ms": 0.067083,
+            "primitive_ms": 0.038661,
+            "execute_ms": 0.481786,
+            "total_ms": 0.605203
+          },
+          {
+            "pd_ms": 0.066083,
+            "primitive_ms": 0.037495,
+            "execute_ms": 0.47792,
+            "total_ms": 0.597495
+          },
+          {
+            "pd_ms": 0.068132,
+            "primitive_ms": 0.039539,
+            "execute_ms": 0.500961,
+            "total_ms": 0.625212
+          }
+        ],
+        "median": {
+          "pd_ms": 0.066083,
+          "primitive_ms": 0.038661,
+          "execute_ms": 0.481786,
+          "total_ms": 0.605203
+        },
+        "hits": 160,
+        "misses": 0,
+        "executions": 160
+      }
+    },
+    "reorder": {
+      "2": {
+        "runs": [
+          {
+            "pd_ms": 0.176578,
+            "primitive_ms": 1.90105,
+            "execute_ms": 0.605618,
+            "total_ms": 2.70471
+          },
+          {
+            "pd_ms": 0.176629,
+            "primitive_ms": 1.9015,
+            "execute_ms": 0.649293,
+            "total_ms": 2.75075
+          },
+          {
+            "pd_ms": 0.18558,
+            "primitive_ms": 1.9285,
+            "execute_ms": 0.648294,
+            "total_ms": 2.78538
+          },
+          {
+            "pd_ms": 0.170626,
+            "primitive_ms": 1.95409,
+            "execute_ms": 0.692248,
+            "total_ms": 2.83913
+          },
+          {
+            "pd_ms": 0.177749,
+            "primitive_ms": 1.97725,
+            "execute_ms": 0.63366,
+            "total_ms": 2.8102
+          }
+        ],
+        "median": {
+          "pd_ms": 0.176629,
+          "primitive_ms": 1.9285,
+          "execute_ms": 0.648294,
+          "total_ms": 2.78538
+        },
+        "hits": 0,
+        "misses": 160,
+        "executions": 160
+      },
+      "256": {
+        "runs": [
+          {
+            "pd_ms": 0.027295,
+            "primitive_ms": 0.035291,
+            "execute_ms": 0.144998,
+            "total_ms": 0.218879
+          },
+          {
+            "pd_ms": 0.026592,
+            "primitive_ms": 0.033243,
+            "execute_ms": 0.145414,
+            "total_ms": 0.216136
+          },
+          {
+            "pd_ms": 0.028382,
+            "primitive_ms": 0.034424,
+            "execute_ms": 0.146579,
+            "total_ms": 0.217632
+          },
+          {
+            "pd_ms": 0.029833,
+            "primitive_ms": 0.034952,
+            "execute_ms": 0.150212,
+            "total_ms": 0.226791
+          },
+          {
+            "pd_ms": 0.025124,
+            "primitive_ms": 0.030918,
+            "execute_ms": 0.138001,
+            "total_ms": 0.202498
+          }
+        ],
+        "median": {
+          "pd_ms": 0.027295,
+          "primitive_ms": 0.034424,
+          "execute_ms": 0.145414,
+          "total_ms": 0.217632
+        },
+        "hits": 160,
+        "misses": 0,
+        "executions": 160
+      }
+    }
+  },
+  "separate_jit_dump_run": {
+    "shuffle": {
+      "2": {
+        "files": 168,
+        "bytes": 276864,
+        "sample_names": [
+          "dnnl_dump_cpu_jit_uni_shuffle_kernel_t.30.bin",
+          "dnnl_dump_cpu_jit_uni_shuffle_kernel_t.24.bin"
+        ]
+      },
+      "256": {
+        "files": 8,
+        "bytes": 13184,
+        "sample_names": [
+          "dnnl_dump_cpu_jit_uni_shuffle_kernel_t.6.bin",
+          "dnnl_dump_cpu_jit_uni_shuffle_kernel_t.7.bin"
+        ]
+      }
+    },
+    "reorder": {
+      "2": {
+        "files": 168,
+        "bytes": 2236080,
+        "sample_names": [
+          "dnnl_dump_cpu_jit_uni_reorder_kernel_f32.3.bin",
+          "dnnl_dump_cpu_jit_uni_reorder_kernel_f32.47.bin"
+        ]
+      },
+      "256": {
+        "files": 8,
+        "bytes": 106480,
+        "sample_names": [
+          "dnnl_dump_cpu_jit_uni_reorder_kernel_f32.3.bin",
+          "dnnl_dump_cpu_jit_uni_reorder_kernel_f32.2.bin"
+        ]
+      }
+    }
+  }
+}

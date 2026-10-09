@@ -36,6 +36,7 @@ enum NodeType {
     // ---- 跨设备通信 (v8) ----
     SEND,           // inputs=[data]; 把 data 送进 rendezvous[key]
     RECV,           // inputs=[]; 从 rendezvous[key] 取出 tensor (阻塞等待)
+    MATMUL2D,       // v10: dense row-major matrix product, forward only
 };
 
 // 纯静态的图节点: 只描述"算什么", 不存运行值 (对应 TF 的 Graph Node)
@@ -98,6 +99,7 @@ public:
     Node* square(Node* a) { return make(SQUARE, "square", {a}); }
     Node* mean(Node* a) { return make(MEAN, "mean", {a}); }
     Node* matmul(Node* a, Node* b) { return make(MATMUL, "matmul", {a, b}); }
+    Node* matmul2d(Node* a, Node* b) { return on(make(MATMUL2D, "matmul2d", {a, b}), Device::CPU); }
     Node* sigmoid(Node* a) { return make(SIGMOID, "sigmoid", {a}); }
     Node* log(Node* a) { return make(LOG, "log", {a}); }
     Node* recip(Node* a) { return make(RECIP, "recip", {a}); }
