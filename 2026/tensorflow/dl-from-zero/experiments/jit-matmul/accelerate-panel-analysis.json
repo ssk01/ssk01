@@ -1,0 +1,96 @@
+{
+  "scope": "Local diagnostic, not a supported backend; timings include different entry and scratch-buffer management for private-kernel paths.",
+  "date": "2026-10-10",
+  "environment": {
+    "cpu": "Apple M4 Pro",
+    "os": "macOS 26.6.1 (25G76)",
+    "libBLAS_uuid": "B8AEEB6D-A458-37C3-B22A-99C768B155EA",
+    "dtype": "FP32",
+    "threads": 1,
+    "m": 144,
+    "n": 144,
+    "k": 512
+  },
+  "method": {
+    "processes": 5,
+    "rounds_per_process": 31,
+    "calls_per_path_per_round": 300,
+    "order": "shuffled each round",
+    "statistic": "median of per-process medians",
+    "validation": "Full output matched cblas_sgemm for original and changed A/B"
+  },
+  "limitations": [
+    "Private functions located using offsets in the locally inspected system framework.",
+    "Original diagnostic harness and disassembly were produced in /tmp/playgroud-kernel-analysis; this record alone is not a portable reproduction package.",
+    "These results are separate from measured-results.json and must not be combined as one run."
+  ],
+  "runs_us": [
+    {
+      "blas_us": 16.90889,
+      "jit_us": 13.57361,
+      "apple_panel32_us": 15.207083,
+      "apple_pack_only_us": 2.683057,
+      "apple_compute_prepacked_us": 12.396807,
+      "apple_panel16_us": 16.307777,
+      "apple_panel64_us": 14.135973,
+      "apple_panel144_us": 14.0975
+    },
+    {
+      "blas_us": 16.27403,
+      "jit_us": 13.351527,
+      "apple_panel32_us": 14.992917,
+      "apple_pack_only_us": 2.640693,
+      "apple_compute_prepacked_us": 12.271667,
+      "apple_panel16_us": 16.081667,
+      "apple_panel64_us": 13.877637,
+      "apple_panel144_us": 14.141947
+    },
+    {
+      "blas_us": 16.07486,
+      "jit_us": 13.396667,
+      "apple_panel32_us": 14.906807,
+      "apple_pack_only_us": 2.637083,
+      "apple_compute_prepacked_us": 12.322083,
+      "apple_panel16_us": 16.2275,
+      "apple_panel64_us": 13.951667,
+      "apple_panel144_us": 14.036807
+    },
+    {
+      "blas_us": 16.164443,
+      "jit_us": 13.356943,
+      "apple_panel32_us": 15.009307,
+      "apple_pack_only_us": 2.646667,
+      "apple_compute_prepacked_us": 12.32111,
+      "apple_panel16_us": 16.082083,
+      "apple_panel64_us": 13.91,
+      "apple_panel144_us": 14.02139
+    },
+    {
+      "blas_us": 16.18236,
+      "jit_us": 13.374307,
+      "apple_panel32_us": 14.88597,
+      "apple_pack_only_us": 2.635973,
+      "apple_compute_prepacked_us": 12.305,
+      "apple_panel16_us": 16.196807,
+      "apple_panel64_us": 13.906803,
+      "apple_panel144_us": 14.051527
+    }
+  ],
+  "median_us": {
+    "blas_us": 16.18236,
+    "jit_us": 13.374307,
+    "apple_panel32_us": 14.992917,
+    "apple_pack_only_us": 2.640693,
+    "apple_compute_prepacked_us": 12.32111,
+    "apple_panel16_us": 16.196807,
+    "apple_panel64_us": 13.91,
+    "apple_panel144_us": 14.051527
+  },
+  "raw_stdout": [
+    "error 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nblas_us 16.908890\njit_us 13.573610\napple_panel32_us 15.207083\napple_pack_only_us 2.683057\napple_compute_prepacked_us 12.396807\napple_panel16_us 16.307777\napple_panel64_us 14.135973\napple_panel144_us 14.097500\n",
+    "error 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nblas_us 16.274030\njit_us 13.351527\napple_panel32_us 14.992917\napple_pack_only_us 2.640693\napple_compute_prepacked_us 12.271667\napple_panel16_us 16.081667\napple_panel64_us 13.877637\napple_panel144_us 14.141947\n",
+    "error 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nblas_us 16.074860\njit_us 13.396667\napple_panel32_us 14.906807\napple_pack_only_us 2.637083\napple_compute_prepacked_us 12.322083\napple_panel16_us 16.227500\napple_panel64_us 13.951667\napple_panel144_us 14.036807\n",
+    "error 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nblas_us 16.164443\njit_us 13.356943\napple_panel32_us 15.009307\napple_pack_only_us 2.646667\napple_compute_prepacked_us 12.321110\napple_panel16_us 16.082083\napple_panel64_us 13.910000\napple_panel144_us 14.021390\n",
+    "error 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nerror 0\nblas_us 16.182360\njit_us 13.374307\napple_panel32_us 14.885970\napple_pack_only_us 2.635973\napple_compute_prepacked_us 12.305000\napple_panel16_us 16.196807\napple_panel64_us 13.906803\napple_panel144_us 14.051527\n"
+  ]
+}

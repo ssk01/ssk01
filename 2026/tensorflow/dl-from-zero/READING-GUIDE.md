@@ -2,6 +2,8 @@
 
 这份导览解释本项目的结构，以及提交 `97c85a9` 增加的 JIT / primitive cache 功能。建议先读本文，再沿文件链接看实现；不用先读完所有历史版本或实测 JSON。
 
+继续理解“为什么生成代码、收益来自哪里”，看 [oneDNN MatMul 代码生成与成本模型](JIT-MATMUL-COST-MODEL.md)。其中区分了源码事实、本机实测和教学估算。
+
 ## 1. 项目在做什么
 
 `dl-from-zero` 是逐步实现 TensorFlow 架构概念的教学框架，不是 TensorFlow 源码或它的插件。已有版本逐步实现图、Session、梯度、优化和设备执行。本次在这个框架上增加二维 MatMul，以及可跨请求复用的计算准备对象。
