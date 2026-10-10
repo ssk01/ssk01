@@ -2,6 +2,8 @@
 
 这些实验为 [v10 primitive cache demo](../v10-primitive-cache/README.md) 提供依据。第一次阅读先看[项目与代码导览](../READING-GUIDE.md)，再读主线实验；设计背景见[四阶段规划](../primitive-cache-plan.md)。
 
+关于 JIT 收益归因、Apple 内核面板对照和 oneDNN 成本模型，见[讨论总结](../JIT-MATMUL-COST-MODEL.md)。
+
 | 目录 | 内容 | 在当前主线中的位置 |
 | --- | --- | --- |
 | [jit-matmul](jit-matmul/README.md) | LIBXSMM SME MatMul 对照 Accelerate，独立测量创建、代码生成、缓存容量 | 主线证据：矩阵各维度大于 100，FP32，M4 Pro |
