@@ -1,0 +1,77 @@
+{
+  "rust_commit": "d5bef75f976ee5880811305621a2883d499f3e65",
+  "nodes": 4096,
+  "edges": 32768,
+  "expected_components": 2,
+  "hilbert_key_checks": 260,
+  "runs": [
+    {
+      "command": [
+        "work/author-cost/target/release/to_hilbert",
+        "work/author-smoke/graph"
+      ],
+      "exit_code": 0,
+      "stdout": ""
+    },
+    {
+      "command": [
+        "work/author-cost/target/release/pagerank",
+        "vertex",
+        "work/author-smoke/graph",
+        "4096"
+      ],
+      "exit_code": 0,
+      "stdout": "Iteration 0:\t39.5\u00b5s\nIteration 1:\t160.542\u00b5s\nIteration 2:\t195.042\u00b5s\nIteration 3:\t229.417\u00b5s\nIteration 4:\t263.375\u00b5s\nIteration 5:\t297.458\u00b5s\nIteration 6:\t332.375\u00b5s\nIteration 7:\t367.125\u00b5s\nIteration 8:\t401.75\u00b5s\nIteration 9:\t436.5\u00b5s\nIteration 10:\t471.333\u00b5s\nIteration 11:\t506.042\u00b5s\nIteration 12:\t540.792\u00b5s\nIteration 13:\t581.5\u00b5s\nIteration 14:\t625.958\u00b5s\nIteration 15:\t660.875\u00b5s\nIteration 16:\t697.25\u00b5s\nIteration 17:\t731.125\u00b5s\nIteration 18:\t764.417\u00b5s\nIteration 19:\t801.875\u00b5s\n"
+    },
+    {
+      "command": [
+        "work/author-cost/target/release/pagerank",
+        "hilbert",
+        "work/author-smoke/graph",
+        "4096"
+      ],
+      "exit_code": 0,
+      "stdout": "Iteration 0:\t50.292\u00b5s\nIteration 1:\t106.333\u00b5s\nIteration 2:\t155.042\u00b5s\nIteration 3:\t202.208\u00b5s\nIteration 4:\t246.667\u00b5s\nIteration 5:\t292.083\u00b5s\nIteration 6:\t335.25\u00b5s\nIteration 7:\t380.5\u00b5s\nIteration 8:\t425.458\u00b5s\nIteration 9:\t469.5\u00b5s\nIteration 10:\t512.625\u00b5s\nIteration 11:\t557.458\u00b5s\nIteration 12:\t601.792\u00b5s\nIteration 13:\t647.208\u00b5s\nIteration 14:\t692.958\u00b5s\nIteration 15:\t737.875\u00b5s\nIteration 16:\t782\u00b5s\nIteration 17:\t826.667\u00b5s\nIteration 18:\t871\u00b5s\nIteration 19:\t917\u00b5s\n"
+    },
+    {
+      "command": [
+        "work/author-cost/target/release/label_prop",
+        "vertex",
+        "work/author-smoke/graph",
+        "4096"
+      ],
+      "exit_code": 0,
+      "stdout": "iteration\niteration\n4094 non-roots found\n"
+    },
+    {
+      "command": [
+        "work/author-cost/target/release/label_prop",
+        "hilbert",
+        "work/author-smoke/graph",
+        "4096"
+      ],
+      "exit_code": 0,
+      "stdout": "iteration\niteration\n4094 non-roots found\n"
+    },
+    {
+      "command": [
+        "work/author-cost/target/release/union_find",
+        "vertex",
+        "work/author-smoke/graph",
+        "4096"
+      ],
+      "exit_code": 0,
+      "stdout": "4094 non-roots found\n"
+    },
+    {
+      "command": [
+        "work/author-cost/target/release/union_find",
+        "hilbert",
+        "work/author-smoke/graph",
+        "4096"
+      ],
+      "exit_code": 0,
+      "stdout": "4094 non-roots found\n"
+    }
+  ]
+}

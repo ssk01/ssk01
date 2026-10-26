@@ -4,6 +4,7 @@ Captures stdout and matplotlib figures as standard .ipynb cell outputs.
 Only use on trusted notebooks: code cells execute as local Python code.
 """
 import os
+import sys
 os.environ.setdefault('MPLCONFIGDIR', '/tmp/cost-pagerank-mpl')
 os.environ['MPLBACKEND'] = 'Agg'
 import base64
@@ -16,7 +17,7 @@ import traceback
 
 def main():
     os.chdir(Path(__file__).resolve().parent)
-    path = Path('cost_pagerank.ipynb')
+    path = Path(sys.argv[1] if len(sys.argv) > 1 else 'cost_pagerank.ipynb')
     nb = json.loads(path.read_text())
     scope = {'__name__': '__main__'}
     counter = 0

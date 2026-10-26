@@ -9,6 +9,7 @@ Learning by doing. Each sub-directory is an independent experiment.
 
 | Project | Language | Description |
 |---------|----------|-------------|
+| [paper_reading](2026/paper_reading/) | Markdown | 论文与文章阅读列表：COST、DuckDB、PageRank、Pregel、HNSW、MapReduce；持续记录阅读状态与笔记 |
 | [cost-pagerank-prototype](2026/cost-pagerank-prototype/) | Python (Jupyter) | COST 与 PageRank 本地实验：自加速比与单线程基线、四节点演示、NumPy/CSR 与多进程对比，附已执行 notebook |
 | [skiplist](2026/skiplist/) | C++ | Redis zskiplist 移植 + benchmark — 对照 std::map / std::unordered_map 测 insert/find/update/range/delete 性能 |
 | [tensorflow/dl-from-zero](2026/tensorflow/dl-from-zero/) | C++ / Python | v0～v10 共 11 个演进版本：计算图、梯度、图优化、多设备、op registry；新增 v10 primitive cache：LIBXSMM JIT MatMul、代码生命周期与 LRU、TF 二维算子接入。先看[阅读导览](2026/tensorflow/dl-from-zero/READING-GUIDE.md)，再看[实测](2026/tensorflow/dl-from-zero/experiments/jit-matmul/README.md) |
