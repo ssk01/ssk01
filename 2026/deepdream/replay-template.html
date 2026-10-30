@@ -1,0 +1,25 @@
+<div id="flower-dream">
+  <div class="viz-row"><button class="btn" data-original>查看原图</button><button class="btn btn-primary" data-play>从头播放</button><span data-status class="tabular-nums" aria-live="polite"></span></div>
+  <img data-picture alt="花卉照片的 DeepDream 优化结果" style="display:block;width:100%;height:auto;margin:12px 0">
+  <label class="form-label" for="dream-step">像素优化进度</label>
+  <input id="dream-step" class="form-range" type="range" min="0" value="10" max="10" step="1">
+  <div class="text-small text-muted">GoogLeNet · inception4d · 固定网络权重 · 实际计算回放</div>
+</div>
+<script>
+(() => {
+const frames = PAYLOAD;
+const root=document.getElementById('flower-dream');
+const picture=root.querySelector('[data-picture]'),slider=root.querySelector('input'),status=root.querySelector('[data-status]'),play=root.querySelector('[data-play]');
+let timer=null,index=frames.length-1;
+slider.max=frames.length-1;
+function draw(){slider.value=index;picture.src=frames[index].src;status.textContent=index===0?'原图':`第 ${frames[index].step} / 175 步`;}
+function stop(){clearInterval(timer);timer=null;play.textContent='从头播放';}
+function save(){if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{step:frames[index].step},privateContent:{index}}).catch(()=>{});}
+function restore(s){const i=s?.privateContent?.index;if(Number.isInteger(i)&&i>=0&&i<frames.length){stop();index=i;draw();}}
+slider.addEventListener('input',()=>{stop();index=Number(slider.value);draw();save();});
+root.querySelector('[data-original]').addEventListener('click',()=>{stop();index=index===0?frames.length-1:0;draw();save();});
+play.addEventListener('click',()=>{if(timer){stop();save();return;}index=0;draw();play.textContent='暂停';timer=setInterval(()=>{index++;draw();if(index===frames.length-1){stop();save();}},650);});
+draw();restore(window.openai?.widgetState);
+window.addEventListener('openai:set_globals',e=>restore(e.detail?.globals?.widgetState));
+})();
+</script>

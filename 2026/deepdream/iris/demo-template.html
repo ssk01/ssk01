@@ -1,0 +1,43 @@
+<div id="iris-causal-demo">
+  <h3>Iris：51 个参数的内部特征实验</h3>
+  <label class="form-label" for="iris-mode">实验</label>
+  <select id="iris-mode" class="form-select">
+    <option value="patch">替换 h3 的激活 · 四个输入固定</option>
+    <option value="increase">最大化 h3 · 修改四个输入</option>
+    <option value="decrease">最小化 h3 · 修改四个输入</option>
+  </select>
+  <div class="viz-row" style="margin-top:16px"><span data-step></span><span data-hidden class="tabular-nums"></span></div>
+  <label class="sr-only" for="iris-progress">从原始样本到干预结果的进度</label>
+  <input id="iris-progress" class="form-range" type="range" min="0" max="40" step="1" value="40">
+  <div data-result aria-live="polite" style="margin:12px 0"></div>
+  <table class="table table-sm">
+    <thead><tr><th>模型分类概率</th><th>原始</th><th>当前</th></tr></thead>
+    <tbody data-probabilities></tbody>
+  </table>
+  <table class="table table-sm">
+    <thead><tr><th>输入尺寸（cm）</th><th>原始</th><th>当前</th></tr></thead>
+    <tbody data-dimensions></tbody>
+  </table>
+  <div class="text-small text-muted">真实测试样本 · Versicolor · 120 条训练 / 30 条测试 · 权重固定</div>
+</div>
+<script>
+(() => {
+const m=MODEL_PAYLOAD;
+const root=document.getElementById('iris-causal-demo');
+const mode=root.querySelector('select'),slider=root.querySelector('input');
+const source=m.representatives[1],names=['Setosa','Versicolor','Virginica'];
+const dimensions=['花萼长度','花萼宽度','花瓣长度','花瓣宽度'];
+const probabilities=root.querySelector('[data-probabilities]'),inputs=root.querySelector('[data-dimensions]');
+probabilities.innerHTML=names.map(n=>`<tr><th>${n}</th><td class="tabular-nums"></td><td class="tabular-nums"><span></span><div style="height:5px;background:var(--muted);margin-top:4px"><div data-bar style="height:100%;background:var(--viz-series-1)"></div></div></td></tr>`).join('');
+inputs.innerHTML=dimensions.map(n=>`<tr><th>${n}</th><td class="tabular-nums"></td><td class="tabular-nums"></td></tr>`).join('');
+function softmax(h){const logits=m.b2.map((b,k)=>b+h.reduce((s,v,j)=>s+v*m.W2[j][k],0));const exp=logits.map(v=>Math.exp(v-Math.max(...logits)));return exp.map(v=>v/exp.reduce((s,a)=>s+a,0));}
+function current(){const step=Number(slider.value);if(mode.value!=='patch')return m.paths[mode.value][step];const h=[...source.h];h[m.neuron]+=(m.donors[m.neuron]-h[m.neuron])*step/40;return {x:source.x,h,p:softmax(h)};}
+function draw(){const v=current(),step=Number(slider.value);root.querySelector('[data-step]').textContent=mode.value==='patch'?`替换强度 ${Math.round(step/40*100)}%`:`输入优化 ${step} / 40 步`;root.querySelector('[data-hidden]').textContent=`h3：${source.h[m.neuron].toFixed(3)} → ${v.h[m.neuron].toFixed(3)}`;root.querySelector('[data-result]').textContent=`分类：Versicolor → ${names[v.p.indexOf(Math.max(...v.p))]}`;
+Array.from(probabilities.rows).forEach((r,k)=>{r.cells[1].textContent=(source.p[k]*100).toFixed(1)+'%';r.cells[2].querySelector('span').textContent=(v.p[k]*100).toFixed(1)+'%';r.querySelector('[data-bar]').style.width=(v.p[k]*100)+'%';});
+Array.from(inputs.rows).forEach((r,k)=>{r.cells[1].textContent=source.x[k].toFixed(2);r.cells[2].textContent=v.x[k].toFixed(2);});}
+function save(){window.openai?.setWidgetState?.({modelContent:{experiment:mode.value,step:Number(slider.value),neuron:'h3'},privateContent:null}).catch(()=>{});}
+function restore(state){const s=state?.modelContent;if(s&&['patch','increase','decrease'].includes(s.experiment)&&Number.isInteger(s.step)&&s.step>=0&&s.step<=40){mode.value=s.experiment;slider.value=s.step;}draw();}
+slider.addEventListener('input',()=>{draw();save();});mode.addEventListener('change',()=>{slider.value=40;draw();save();});
+restore(window.openai?.widgetState);window.addEventListener('openai:set_globals',e=>restore(e.detail?.globals?.widgetState));
+})();
+</script>

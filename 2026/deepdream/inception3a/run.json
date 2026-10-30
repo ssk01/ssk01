@@ -1,0 +1,177 @@
+{
+  "layer": "inception3a",
+  "device": "mps",
+  "weights": "GoogLeNet_Weights.IMAGENET1K_V1",
+  "weight_sha256": "517fc8a029c9f641da32421e20d57754f2f5863006b025e6e77f7e4eacc3629a",
+  "weights_unchanged": true,
+  "elapsed_seconds": 1.8969242500024848,
+  "step_size": 0.012,
+  "steps_per_octave": 25,
+  "sizes": [
+    200,
+    280,
+    392,
+    548,
+    768
+  ],
+  "frames": [
+    {
+      "file": "original.jpg",
+      "step": 0,
+      "octave": 0,
+      "loss": null
+    },
+    {
+      "file": "inception3a/frame-005.jpg",
+      "step": 5,
+      "octave": 1,
+      "loss": 1.0920491218566895
+    },
+    {
+      "file": "inception3a/frame-010.jpg",
+      "step": 10,
+      "octave": 1,
+      "loss": 1.3339474201202393
+    },
+    {
+      "file": "inception3a/frame-015.jpg",
+      "step": 15,
+      "octave": 1,
+      "loss": 1.7213925123214722
+    },
+    {
+      "file": "inception3a/frame-020.jpg",
+      "step": 20,
+      "octave": 1,
+      "loss": 2.1330854892730713
+    },
+    {
+      "file": "inception3a/frame-025.jpg",
+      "step": 25,
+      "octave": 1,
+      "loss": 2.576658248901367
+    },
+    {
+      "file": "inception3a/frame-030.jpg",
+      "step": 30,
+      "octave": 2,
+      "loss": 1.777249813079834
+    },
+    {
+      "file": "inception3a/frame-035.jpg",
+      "step": 35,
+      "octave": 2,
+      "loss": 2.033989429473877
+    },
+    {
+      "file": "inception3a/frame-040.jpg",
+      "step": 40,
+      "octave": 2,
+      "loss": 2.816779851913452
+    },
+    {
+      "file": "inception3a/frame-045.jpg",
+      "step": 45,
+      "octave": 2,
+      "loss": 2.9113194942474365
+    },
+    {
+      "file": "inception3a/frame-050.jpg",
+      "step": 50,
+      "octave": 2,
+      "loss": 3.412961006164551
+    },
+    {
+      "file": "inception3a/frame-055.jpg",
+      "step": 55,
+      "octave": 3,
+      "loss": 1.9280983209609985
+    },
+    {
+      "file": "inception3a/frame-060.jpg",
+      "step": 60,
+      "octave": 3,
+      "loss": 2.6123528480529785
+    },
+    {
+      "file": "inception3a/frame-065.jpg",
+      "step": 65,
+      "octave": 3,
+      "loss": 2.796206474304199
+    },
+    {
+      "file": "inception3a/frame-070.jpg",
+      "step": 70,
+      "octave": 3,
+      "loss": 3.4249770641326904
+    },
+    {
+      "file": "inception3a/frame-075.jpg",
+      "step": 75,
+      "octave": 3,
+      "loss": 3.5702662467956543
+    },
+    {
+      "file": "inception3a/frame-080.jpg",
+      "step": 80,
+      "octave": 4,
+      "loss": 2.028233289718628
+    },
+    {
+      "file": "inception3a/frame-085.jpg",
+      "step": 85,
+      "octave": 4,
+      "loss": 2.4534640312194824
+    },
+    {
+      "file": "inception3a/frame-090.jpg",
+      "step": 90,
+      "octave": 4,
+      "loss": 2.9706480503082275
+    },
+    {
+      "file": "inception3a/frame-095.jpg",
+      "step": 95,
+      "octave": 4,
+      "loss": 3.3353562355041504
+    },
+    {
+      "file": "inception3a/frame-100.jpg",
+      "step": 100,
+      "octave": 4,
+      "loss": 3.7614028453826904
+    },
+    {
+      "file": "inception3a/frame-105.jpg",
+      "step": 105,
+      "octave": 5,
+      "loss": 2.0093793869018555
+    },
+    {
+      "file": "inception3a/frame-110.jpg",
+      "step": 110,
+      "octave": 5,
+      "loss": 2.3812193870544434
+    },
+    {
+      "file": "inception3a/frame-115.jpg",
+      "step": 115,
+      "octave": 5,
+      "loss": 2.8949389457702637
+    },
+    {
+      "file": "inception3a/frame-120.jpg",
+      "step": 120,
+      "octave": 5,
+      "loss": 2.948882818222046
+    },
+    {
+      "file": "inception3a/frame-125.jpg",
+      "step": 125,
+      "octave": 5,
+      "loss": 3.417593479156494
+    }
+  ],
+  "image_source": "scikit-learn load_sample_image flower.jpg",
+  "method": "Gradient ascent on mean squared hidden activations, random jitter and multiscale detail carry-over"
+}

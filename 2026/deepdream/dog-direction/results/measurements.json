@@ -1,0 +1,210 @@
+{
+  "model_url": "https://storage.googleapis.com/modelzoo/vision/other_models/InceptionV1.pb",
+  "model_sha256": "a39b08b826c9d5a5532ff424c03a3a11a202967544e389aca4b06c2bd8aef63f",
+  "source_photo": "https://storage.googleapis.com/download.tensorflow.org/example_images/YellowLabradorLooking_new.jpg",
+  "channels_selected_from": "Distill DogCircuit.svg mixed4a_308 and mixed4a_222",
+  "statistic": "Spatial maximum of post-ReLU channel; mean also reported",
+  "scope": "One natural dog photo, mirrored and cropped; crops are not independent dogs. No training or channel search.",
+  "rows": [
+    {
+      "image": "full",
+      "flipped": false,
+      "mixed4a:308": {
+        "max": 785.5859375,
+        "mean": 37.53459930419922
+      },
+      "mixed4a:222": {
+        "max": 454.84857177734375,
+        "mean": 25.38026237487793
+      },
+      "mixed4b:409": {
+        "max": 495.0093078613281,
+        "mean": 42.335296630859375
+      },
+      "mixed4b:418": {
+        "max": 1120.97802734375,
+        "mean": 46.78305435180664
+      }
+    },
+    {
+      "image": "full",
+      "flipped": true,
+      "mixed4a:308": {
+        "max": 456.2459716796875,
+        "mean": 28.72974395751953
+      },
+      "mixed4a:222": {
+        "max": 667.3217163085938,
+        "mean": 32.45918273925781
+      },
+      "mixed4b:409": {
+        "max": 534.0365600585938,
+        "mean": 43.3710823059082
+      },
+      "mixed4b:418": {
+        "max": 1059.8896484375,
+        "mean": 41.02519226074219
+      }
+    },
+    {
+      "image": "head",
+      "flipped": false,
+      "mixed4a:308": {
+        "max": 789.7232666015625,
+        "mean": 28.240787506103516
+      },
+      "mixed4a:222": {
+        "max": 378.3680419921875,
+        "mean": 11.166844367980957
+      },
+      "mixed4b:409": {
+        "max": 1051.2947998046875,
+        "mean": 83.62649536132812
+      },
+      "mixed4b:418": {
+        "max": 620.1318969726562,
+        "mean": 23.144441604614258
+      }
+    },
+    {
+      "image": "head",
+      "flipped": true,
+      "mixed4a:308": {
+        "max": 337.5494079589844,
+        "mean": 14.873196601867676
+      },
+      "mixed4a:222": {
+        "max": 722.2103881835938,
+        "mean": 27.369070053100586
+      },
+      "mixed4b:409": {
+        "max": 1121.8798828125,
+        "mean": 95.49091339111328
+      },
+      "mixed4b:418": {
+        "max": 606.7086181640625,
+        "mean": 20.726869583129883
+      }
+    },
+    {
+      "image": "head_wide",
+      "flipped": false,
+      "mixed4a:308": {
+        "max": 941.598876953125,
+        "mean": 27.460285186767578
+      },
+      "mixed4a:222": {
+        "max": 199.18540954589844,
+        "mean": 10.850074768066406
+      },
+      "mixed4b:409": {
+        "max": 1147.1881103515625,
+        "mean": 84.4257583618164
+      },
+      "mixed4b:418": {
+        "max": 928.7697143554688,
+        "mean": 36.24879837036133
+      }
+    },
+    {
+      "image": "head_wide",
+      "flipped": true,
+      "mixed4a:308": {
+        "max": 273.4567565917969,
+        "mean": 12.068461418151855
+      },
+      "mixed4a:222": {
+        "max": 876.0999755859375,
+        "mean": 22.834064483642578
+      },
+      "mixed4b:409": {
+        "max": 1221.783935546875,
+        "mean": 99.35858154296875
+      },
+      "mixed4b:418": {
+        "max": 965.6876220703125,
+        "mean": 28.814340591430664
+      }
+    },
+    {
+      "image": "head_gray",
+      "flipped": false,
+      "mixed4a:308": {
+        "max": 650.1765747070312,
+        "mean": 25.2720947265625
+      },
+      "mixed4a:222": {
+        "max": 431.75262451171875,
+        "mean": 12.859594345092773
+      },
+      "mixed4b:409": {
+        "max": 960.8309326171875,
+        "mean": 70.93370819091797
+      },
+      "mixed4b:418": {
+        "max": 559.4981689453125,
+        "mean": 17.630956649780273
+      }
+    },
+    {
+      "image": "head_gray",
+      "flipped": true,
+      "mixed4a:308": {
+        "max": 331.8131103515625,
+        "mean": 13.182104110717773
+      },
+      "mixed4a:222": {
+        "max": 571.7106323242188,
+        "mean": 23.897396087646484
+      },
+      "mixed4b:409": {
+        "max": 902.0902099609375,
+        "mean": 77.42422485351562
+      },
+      "mixed4b:418": {
+        "max": 424.2198486328125,
+        "mean": 14.117188453674316
+      }
+    },
+    {
+      "image": "flower_control",
+      "flipped": false,
+      "mixed4a:308": {
+        "max": 75.77539825439453,
+        "mean": 3.0130765438079834
+      },
+      "mixed4a:222": {
+        "max": 187.0783233642578,
+        "mean": 8.897775650024414
+      },
+      "mixed4b:409": {
+        "max": 284.5230407714844,
+        "mean": 36.94466018676758
+      },
+      "mixed4b:418": {
+        "max": 76.16376495361328,
+        "mean": 0.773921549320221
+      }
+    },
+    {
+      "image": "flower_control",
+      "flipped": true,
+      "mixed4a:308": {
+        "max": 182.25001525878906,
+        "mean": 11.681981086730957
+      },
+      "mixed4a:222": {
+        "max": 67.89928436279297,
+        "mean": 1.773568034172058
+      },
+      "mixed4b:409": {
+        "max": 303.77801513671875,
+        "mean": 40.67189407348633
+      },
+      "mixed4b:418": {
+        "max": 45.11499786376953,
+        "mean": 0.7947157025337219
+      }
+    }
+  ]
+}

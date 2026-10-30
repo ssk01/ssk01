@@ -1,0 +1,237 @@
+{
+  "layer": "inception4d",
+  "device": "mps",
+  "weights": "GoogLeNet_Weights.IMAGENET1K_V1",
+  "weight_sha256": "3302fa64a1e7f11910e2394d90853849384cc81509fba8e766b33d98ea73d404",
+  "weights_unchanged": true,
+  "elapsed_seconds": 7.36394987499807,
+  "step_size": 0.012,
+  "steps_per_octave": 35,
+  "sizes": [
+    200,
+    280,
+    392,
+    548,
+    768
+  ],
+  "frames": [
+    {
+      "file": "original.jpg",
+      "step": 0,
+      "octave": 0,
+      "loss": null
+    },
+    {
+      "file": "inception4d/frame-005.jpg",
+      "step": 5,
+      "octave": 1,
+      "loss": 0.4406704902648926
+    },
+    {
+      "file": "inception4d/frame-010.jpg",
+      "step": 10,
+      "octave": 1,
+      "loss": 0.5724400877952576
+    },
+    {
+      "file": "inception4d/frame-015.jpg",
+      "step": 15,
+      "octave": 1,
+      "loss": 0.8077661395072937
+    },
+    {
+      "file": "inception4d/frame-020.jpg",
+      "step": 20,
+      "octave": 1,
+      "loss": 0.9179403781890869
+    },
+    {
+      "file": "inception4d/frame-025.jpg",
+      "step": 25,
+      "octave": 1,
+      "loss": 1.0493512153625488
+    },
+    {
+      "file": "inception4d/frame-030.jpg",
+      "step": 30,
+      "octave": 1,
+      "loss": 1.1516201496124268
+    },
+    {
+      "file": "inception4d/frame-035.jpg",
+      "step": 35,
+      "octave": 1,
+      "loss": 1.1290085315704346
+    },
+    {
+      "file": "inception4d/frame-040.jpg",
+      "step": 40,
+      "octave": 2,
+      "loss": 0.9063661694526672
+    },
+    {
+      "file": "inception4d/frame-045.jpg",
+      "step": 45,
+      "octave": 2,
+      "loss": 1.0179108381271362
+    },
+    {
+      "file": "inception4d/frame-050.jpg",
+      "step": 50,
+      "octave": 2,
+      "loss": 1.1916940212249756
+    },
+    {
+      "file": "inception4d/frame-055.jpg",
+      "step": 55,
+      "octave": 2,
+      "loss": 1.3025630712509155
+    },
+    {
+      "file": "inception4d/frame-060.jpg",
+      "step": 60,
+      "octave": 2,
+      "loss": 1.4789133071899414
+    },
+    {
+      "file": "inception4d/frame-065.jpg",
+      "step": 65,
+      "octave": 2,
+      "loss": 1.5579781532287598
+    },
+    {
+      "file": "inception4d/frame-070.jpg",
+      "step": 70,
+      "octave": 2,
+      "loss": 1.5990954637527466
+    },
+    {
+      "file": "inception4d/frame-075.jpg",
+      "step": 75,
+      "octave": 3,
+      "loss": 0.9230172634124756
+    },
+    {
+      "file": "inception4d/frame-080.jpg",
+      "step": 80,
+      "octave": 3,
+      "loss": 1.225215196609497
+    },
+    {
+      "file": "inception4d/frame-085.jpg",
+      "step": 85,
+      "octave": 3,
+      "loss": 1.4642572402954102
+    },
+    {
+      "file": "inception4d/frame-090.jpg",
+      "step": 90,
+      "octave": 3,
+      "loss": 1.557287335395813
+    },
+    {
+      "file": "inception4d/frame-095.jpg",
+      "step": 95,
+      "octave": 3,
+      "loss": 1.6783283948898315
+    },
+    {
+      "file": "inception4d/frame-100.jpg",
+      "step": 100,
+      "octave": 3,
+      "loss": 1.8333088159561157
+    },
+    {
+      "file": "inception4d/frame-105.jpg",
+      "step": 105,
+      "octave": 3,
+      "loss": 1.9314894676208496
+    },
+    {
+      "file": "inception4d/frame-110.jpg",
+      "step": 110,
+      "octave": 4,
+      "loss": 1.0249738693237305
+    },
+    {
+      "file": "inception4d/frame-115.jpg",
+      "step": 115,
+      "octave": 4,
+      "loss": 1.342187762260437
+    },
+    {
+      "file": "inception4d/frame-120.jpg",
+      "step": 120,
+      "octave": 4,
+      "loss": 1.4031041860580444
+    },
+    {
+      "file": "inception4d/frame-125.jpg",
+      "step": 125,
+      "octave": 4,
+      "loss": 1.646147608757019
+    },
+    {
+      "file": "inception4d/frame-130.jpg",
+      "step": 130,
+      "octave": 4,
+      "loss": 1.9563723802566528
+    },
+    {
+      "file": "inception4d/frame-135.jpg",
+      "step": 135,
+      "octave": 4,
+      "loss": 1.8939321041107178
+    },
+    {
+      "file": "inception4d/frame-140.jpg",
+      "step": 140,
+      "octave": 4,
+      "loss": 2.0269744396209717
+    },
+    {
+      "file": "inception4d/frame-145.jpg",
+      "step": 145,
+      "octave": 5,
+      "loss": 1.112067461013794
+    },
+    {
+      "file": "inception4d/frame-150.jpg",
+      "step": 150,
+      "octave": 5,
+      "loss": 1.264963150024414
+    },
+    {
+      "file": "inception4d/frame-155.jpg",
+      "step": 155,
+      "octave": 5,
+      "loss": 1.6288611888885498
+    },
+    {
+      "file": "inception4d/frame-160.jpg",
+      "step": 160,
+      "octave": 5,
+      "loss": 1.4704926013946533
+    },
+    {
+      "file": "inception4d/frame-165.jpg",
+      "step": 165,
+      "octave": 5,
+      "loss": 1.7081831693649292
+    },
+    {
+      "file": "inception4d/frame-170.jpg",
+      "step": 170,
+      "octave": 5,
+      "loss": 1.81917142868042
+    },
+    {
+      "file": "inception4d/frame-175.jpg",
+      "step": 175,
+      "octave": 5,
+      "loss": 1.8114713430404663
+    }
+  ],
+  "image_source": "scikit-learn load_sample_image flower.jpg",
+  "method": "Gradient ascent on mean squared hidden activations, random jitter and multiscale detail carry-over"
+}
