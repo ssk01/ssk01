@@ -11,7 +11,7 @@ Learning by doing. Each sub-directory is an independent experiment.
 |---------|----------|-------------|
 | [deepdream](2026/deepdream/) | Python (Jupyter) | 花卉照片 DeepDream：固定 GoogLeNet，通过像素梯度上升生成迷幻纹理，附已执行 Notebook 和离线过程回放 |
 | [paper_reading](2026/paper_reading/) | Markdown | 论文与文章阅读列表：COST、DuckDB、PageRank、Pregel、HNSW、MapReduce；持续记录阅读状态与笔记 |
-| [cost-pagerank-prototype](2026/cost-pagerank-prototype/) | Python (Jupyter) | COST 与 PageRank 本地实验：自加速比与单线程基线、四节点演示、NumPy/CSR 与多进程对比，附已执行 notebook |
+| [cost-pagerank-prototype](2026/cost-pagerank-prototype/) | Python (Jupyter) | 《Scalability! But at what COST?》（HotOS 2015）论文研读与本地实验：附[中文译文](2026/cost-pagerank-prototype/cost-paper-zh.md)，通过 PageRank、连通分量与 Hilbert 布局实验，理解“并行系统需要多少资源才能超过高效单线程” |
 | [skiplist](2026/skiplist/) | C++ | Redis zskiplist 移植 + benchmark — 对照 std::map / std::unordered_map 测 insert/find/update/range/delete 性能 |
 | [tensorflow/dl-from-zero](2026/tensorflow/dl-from-zero/) | C++ / Python | v0～v10 共 11 个演进版本：计算图、梯度、图优化、多设备、op registry；新增 v10 primitive cache：LIBXSMM JIT MatMul、代码生命周期与 LRU、TF 二维算子接入。先看[阅读导览](2026/tensorflow/dl-from-zero/READING-GUIDE.md)，再看[实测](2026/tensorflow/dl-from-zero/experiments/jit-matmul/README.md) |
 | [rtti](2026/rtti/) | C++ / Java | RTTI 运行时类型信息详解 — Preorder 区间编号（最小每对象 4B + O(1) instanceof）、JVM 压缩 klass ptr 模拟、C++ vptr/vtable/dynamic_cast 模拟、Euler Tour 三题 |
