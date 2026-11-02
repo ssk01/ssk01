@@ -1,6 +1,57 @@
-# 花卉 DeepDream
+# DeepDream：从迷幻图像到特征解释
 
 用 ImageNet 预训练的 GoogLeNet，固定网络权重，通过梯度上升修改花卉照片的像素。逐渐出现重复的眼状、鳞片状纹理和彩色边缘。
+
+## 从哪里开始
+
+| 想回答的问题 | 实验与阅读入口 |
+|---|---|
+| 为什么花卉照片会长出眼睛、鳞片？ | [花卉 DeepDream Notebook](deepdream.ipynb) 与 [过程回放](replay.html) |
+| 是网络结构还是训练数据造成动物形状？ | [ImageNet / Places205 对照 Notebook](attribution-controls/comparison.ipynb) · [结论与方法](attribution-controls/README.md) |
+| 网络真的区分狗头朝左、朝右吗？ | [指定通道的可视化与镜像实验](dog-direction/README.md) |
+| 能否用小网络把梯度和干预算清楚？ | [51 参数 Iris 实验](iris/README.md) |
+
+## DeepDream：是结构，还是训练数据？
+
+**本地对照显示：训练形成的权重决定了明显的内容差异；相同结构和优化方式都可以产生密集重复的纹理。** ImageNet 权重长出鸟头、眼睛和动物皮肤般斑纹，Places205 场景权重则长出塔尖、拱门和建筑般结构。
+
+### 同一结构，换训练数据对应的权重
+
+两组使用完全相同的原版 GoogLeNet 特征提取器，固定同一张花卉照片、`inception_4d` 层、输入预处理、随机平移序列和 175 步优化。分类头不参与计算；程序检查结构相同、优化前后权重不变。
+
+**ImageNet：鸟头、眼睛与动物般斑纹。**
+
+![相同结构加载 ImageNet 权重](attribution-controls/results/imagenet.png)
+
+**Places205：塔尖、拱门与建筑般层叠结构。**
+
+![相同结构加载 Places205 权重](attribution-controls/results/places205.png)
+
+这组结果支持“动物形态与训练学到的视觉特征有关”。两组都重复、拼接局部形状，但重复的具体内容改变了。Places205 换回训练时的原生输入均值后，建筑般形态仍然出现。
+
+### 随机权重为什么也会出现亮斑？
+
+随机网络仍对像素有响应。我们把像素转换为 `z = 2x − 1`，再最大化内部激活的平方均值。当前随机初始化的网络满足正齐次性：输入相对中灰的幅度放大 t 倍，目标值放大 t² 倍。因此，即使没有学过动物，优化也能通过增强亮暗变化提高目标。
+
+![随机权重产生的亮暗噪斑](attribution-controls/results/random-42.png)
+
+纯灰输入的实测结果如下（随机种子 42）：
+
+| 输入像素值 | 平均归一化梯度 | 更新方向 |
+|---|---:|---|
+| 暗灰 0.1 | −0.1577 | 更暗 |
+| 中灰 0.5 | 0 | 保持不动 |
+| 亮灰 0.9 | +0.1096 | 更亮 |
+
+两组随机种子的非零探针都通过了 `(x−0.5)·∇J = 2J` 的数值检查。花形仍可辨认，是因为优化从原图出发，每个尺度继续叠加原图基底；局部亮暗噪斑则来自随机网络响应被反复放大。本次随机结果中，接近白色上限的颜色通道占比从 0.13% 增至 2.18%，同时有 10.10% 接近黑色下限。
+
+### 原作者的解释与本地验证
+
+[Google《Inceptionism》（2015）](https://research.google/blog/inceptionism-going-deeper-into-neural-networks/)已经把动物形状联系到训练数据，并展示了 Places 场景网络的梦境。[《Feature Visualization》（2017）](https://distill.pub/2017/feature-visualization/)进一步讨论了步幅卷积、池化与高频梯度伪影。本地实验固定输入和优化设置重现内容差异，并补充随机权重的灰度探针分析。
+
+这组公开权重各自的训练过程也有差异，因此结果针对训练形成的权重差异。随机权重亮斑分析沿用原实验的 torchvision 结构，数据集对照则使用两套匹配的原版 Caffe GoogLeNet 权重。详细配置见 [对照实验说明](attribution-controls/README.md)，图片与数值检查见 [已执行 Notebook](attribution-controls/comparison.ipynb)。
+
+## 最初的花卉实验
 
 ![原图](original.jpg)
 ![DeepDream 结果](inception4d/final.png)

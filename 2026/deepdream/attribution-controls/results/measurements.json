@@ -1,0 +1,149 @@
+{
+  "sizes": [
+    200,
+    280,
+    392,
+    548,
+    768
+  ],
+  "steps_per_size": 35,
+  "step_size": 0.012,
+  "original": {
+    "mean": 0.24287885427474976,
+    "near_white_channels": 0.001330747501924634,
+    "near_black_channels": 0.15613900125026703
+  },
+  "imagenet": {
+    "weights_sha256": "27a684af94b32684ad234198649d459a2cbd156ed8db49f015dfb7cfc1076f04",
+    "stats": {
+      "mean": 0.30134931206703186,
+      "near_white_channels": 0.00490485318005085,
+      "near_black_channels": 0.03653208538889885
+    }
+  },
+  "places205": {
+    "weights_sha256": "e3edb9205745bccc1078d3d309d45044c56a1362fbd41b7c6a2eb20f620dcd3a",
+    "stats": {
+      "mean": 0.30599135160446167,
+      "near_white_channels": 0.0053736367262899876,
+      "near_black_channels": 0.04199473187327385
+    }
+  },
+  "places205_native": {
+    "weights_sha256": "e3edb9205745bccc1078d3d309d45044c56a1362fbd41b7c6a2eb20f620dcd3a",
+    "stats": {
+      "mean": 0.3055465817451477,
+      "near_white_channels": 0.004925197921693325,
+      "near_black_channels": 0.0422329381108284
+    }
+  },
+  "identical_feature_architecture": true,
+  "random_42": {
+    "weights_sha256": "2d407c7742a56cab1baef6d7ebaf5f678f5f5ee7af79ec84125823a044062bbe",
+    "stats": {
+      "mean": 0.27931350469589233,
+      "near_white_channels": 0.02179802767932415,
+      "near_black_channels": 0.10102759301662445
+    }
+  },
+  "probes_42": {
+    "0.1": {
+      "energy": 1.1544281086628416e-09,
+      "mean_normalized_gradient": -0.15769612789154053,
+      "radial_gradient": 0.06307845562696457,
+      "euler_ratio": 2.000000238418579
+    },
+    "0.3": {
+      "energy": 2.8860691614340794e-10,
+      "mean_normalized_gradient": -0.15769611299037933,
+      "radial_gradient": 0.03153922036290169,
+      "euler_ratio": 2.000000476837158
+    },
+    "0.5": {
+      "energy": 0.0,
+      "mean_normalized_gradient": 0.0,
+      "radial_gradient": 0.0,
+      "euler_ratio": null
+    },
+    "0.7": {
+      "energy": 1.352117168229583e-10,
+      "mean_normalized_gradient": 0.10960250347852707,
+      "radial_gradient": 0.021920496597886086,
+      "euler_ratio": 2.000000238418579
+    },
+    "0.9": {
+      "energy": 5.408468672918332e-10,
+      "mean_normalized_gradient": 0.10960250347852707,
+      "radial_gradient": 0.04384099319577217,
+      "euler_ratio": 2.000000238418579
+    },
+    "flower": {
+      "energy": 2.9781930255268207e-09,
+      "mean_normalized_gradient": -0.04559394717216492,
+      "radial_gradient": 0.04616475850343704,
+      "euler_ratio": 1.9999998807907104
+    }
+  },
+  "inverted": {
+    "weights_sha256": "2d407c7742a56cab1baef6d7ebaf5f678f5f5ee7af79ec84125823a044062bbe",
+    "stats": {
+      "mean": 0.7179388403892517,
+      "near_white_channels": 0.08063846081495285,
+      "near_black_channels": 0.0268673375248909
+    }
+  },
+  "gray": {
+    "weights_sha256": "2d407c7742a56cab1baef6d7ebaf5f678f5f5ee7af79ec84125823a044062bbe",
+    "stats": {
+      "mean": 0.5,
+      "near_white_channels": 0.0,
+      "near_black_channels": 0.0
+    }
+  },
+  "random_43": {
+    "weights_sha256": "065e971097beae944d750cc1ff030ed47f046b6a2c3c2971b36557ef77d6d014",
+    "stats": {
+      "mean": 0.284880667924881,
+      "near_white_channels": 0.02716742642223835,
+      "near_black_channels": 0.09888628125190735
+    }
+  },
+  "probes_43": {
+    "0.1": {
+      "energy": 1.5495343896887448e-09,
+      "mean_normalized_gradient": -0.16200093924999237,
+      "radial_gradient": 0.06480037420988083,
+      "euler_ratio": 1.9999998807907104
+    },
+    "0.3": {
+      "energy": 3.873835696666106e-10,
+      "mean_normalized_gradient": -0.16200092434883118,
+      "radial_gradient": 0.03240017965435982,
+      "euler_ratio": 1.9999995231628418
+    },
+    "0.5": {
+      "energy": 0.0,
+      "mean_normalized_gradient": 0.0,
+      "radial_gradient": 0.0,
+      "euler_ratio": null
+    },
+    "0.7": {
+      "energy": 1.6085276166588613e-10,
+      "mean_normalized_gradient": 0.10634957253932953,
+      "radial_gradient": 0.021269910037517548,
+      "euler_ratio": 2.000000238418579
+    },
+    "0.9": {
+      "energy": 6.434110466635445e-10,
+      "mean_normalized_gradient": 0.10634957253932953,
+      "radial_gradient": 0.042539820075035095,
+      "euler_ratio": 2.000000238418579
+    },
+    "flower": {
+      "energy": 5.039558992336879e-09,
+      "mean_normalized_gradient": -0.05043795332312584,
+      "radial_gradient": 0.05564688891172409,
+      "euler_ratio": 2.0
+    }
+  }
+}

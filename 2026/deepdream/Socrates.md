@@ -8,6 +8,13 @@
 核对 Google 原始开源 Notebook：https://github.com/google/deepdream/blob/master/dream.ipynb 。原版固定 ImageNet GoogLeNet，最大化某隐藏层激活的 L2 目标，通过梯度上升修改输入图片，并使用随机平移、梯度幅度归一化、多尺度处理。本项目的激活平方均值目标与原版平方和目标只差正比例常数，梯度归一化后方向一致；属于同类算法的 PyTorch 实现。权重、选层和超参数不同，结果不会逐像素一致。动物形态是学到的视觉特征被反复增强的结果，具体形态依赖原图和选层。
 (2026-10-30)
 
+
+补充：DeepDream 图像的成因需要区分语义内容与视觉伪影。Google 2015 年原文（Olah 共同署名）将动物形状关联到动物训练数据，并展示场景数据训练的网络；选层决定更偏边缘纹理还是复杂形状。重复优化把初始微弱匹配放大。按卷积权重共享和整层激活目标分析，同类局部特征可在多个位置同时被增强，而目标没有要求对象数量和身体结构合理。Olah 等人的 2017 年 Feature Visualization 进一步指出，步幅卷积和池化在反向传播中会产生高频、棋盘状梯度，影响纹理；这是架构对伪影的贡献，不能据此把狗脸语义归因到某个池化组件。图像外观还依赖多尺度、抖动、正则化和输入参数化。来源：[Google 2015](https://research.google/blog/inceptionism-going-deeper-into-neural-networks/)、[Distill 2017](https://distill.pub/2017/feature-visualization/)。
+(2026-11-02)
+
+
+实测补充（2026-11-02）：在完全相同的原版 Caffe GoogLeNet 特征提取器上，ImageNet 权重生成鸟头、眼睛与动物皮肤般斑纹；Places205 权重生成塔尖、拱门等建筑般结构。统一预处理后差异仍明显，Places 原生预处理也生成建筑结构。两者的分类头不参与计算。原 torchvision 网络的随机权重实验中，暗灰探针平均梯度为负、亮灰为正、中灰为零；正齐次网络的平方激活目标满足 J(tz)=t²J(z)，数值验证 Euler 比值约为 2。随机网络有响应，优化放大偏离中灰的幅度，无需物体语义；原图和多尺度原图基底保留了花的形状。结果与可复跑代码见 attribution-controls/README.md。
+
 ### Q: 能复现 Olah 说的狗头左右朝向吗？
 使用 Lucid 原研究 InceptionV1 权重及 Distill DogCircuit.svg 指定的 mixed4a:308、mixed4a:222。狗头朝画面右侧时，两通道最大激活分别为 789.72、378.37；同一裁剪镜像后分别为 337.55、722.21。后续 mixed4b:409 对两向均较强（1051.29、1121.88）。从随机 Fourier 参数优化两个指定通道的 pre-ReLU 激活，也生成相反朝向的长嘴狗头，无狗照片或文字提示。自然图像来自一只狗，裁剪与灰度是同一图的变体；该实验复现单元方向偏好，未验证完整跨层因果通路或跨犬种泛化。代码、结果及 Notebook 位于 dog-direction/。
 
@@ -57,5 +64,11 @@ OpenAI（2025-12-01）：针对泛化失调与不当认同用户信念两类行�
 
 这一方向的实际目标，是把一部分模型问题转化为“提出机制解释 → 针对性修改 → 测量收益与副作用”的工程过程。
 (2026-10-30)
+
+### Q: DeepDream 原文是否讨论训练数据的影响？有多少引用？
+Google 2015 年《Inceptionism: Going Deeper into Neural Networks》由 Mordvintsev、Olah、Tyka 共同署名，明确讨论动物训练数据，并展示 Places 场景网络的生成结果。本项目同架构对照复现了动物形态与建筑形态的差异。原文的随机噪声是输入随机，区别于本地补充的随机权重实验。
+
+2026-11-02 查询到的引用统计快照：Rankless 打开页面显示 338（搜索摘要有不同缓存值），Metascience Observatory 的参考文献记录显示 551。两者口径和更新进度不同；不作为 Google Scholar 实时引用总数。来源：[Rankless](https://www.rankless.org/authors/mike-tyka)、[Metascience Observatory](https://explore.metascienceobservatory.org/papers/W2792641098)。
+(2026-11-02)
 
 <!-- 以下继续记录 -->

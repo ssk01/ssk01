@@ -1,0 +1,8 @@
+torch
+torchvision
+numpy
+pillow
+pytorch-caffe-models @ git+https://github.com/crowsonkb/pytorch-caffe-models.git@9bd3cb63a559fd79acffb7c0538432ff95a1672b
+nbformat
+nbclient
+ipykernel
