@@ -1,0 +1,2 @@
+Apple clang version 17.0.0 (clang-1700.3.19.1)
+Target: arm64-apple-darwin25.6.0

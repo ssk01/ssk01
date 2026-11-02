@@ -1,0 +1,15 @@
+Optimized tests: PASS 92580 independent oracle cases.
+UBSan tests: PASS 92580 independent oracle cases.
+Guard-page and boundary tests: included in both runs.
+Benchmark: 3 independent invocations per compiler configuration; all counts match std::string_view and independent Python byte-string checks.
+Trace: exact bytes validated against bundled sample row 6945.
+Sample SHA-256 and row lengths: verified.
+ASan: environment startup issue reproduced with a minimal program in prior validation; not marked as passed.
+
+First-byte and whole-word frequency-bucket revision: 20 nonempty logarithmic buckets, 3 distinct samples each; 64 unique keys after controls. Sampling bounds and input-order independence checked.
+Benchmark: 896 summary rows (64 keys x 7 paths x 2 configs), 3 independent invocations per config. All hits and separate scalar-work hit counts agree with the C++ oracle; Python counts agree independently.
+System memchr external reference confirmed with nm. All generated figures visually inspected.
+
+Grouped experiment: 72 distinct real keys, 9 groups of 8, 3 runs x 504 path results. Each run checked against independent Python matches; group lengths/anchors and deterministic selection verified.
+
+Runtime memchr: LLDB followed the benchmark call through its symbol stub into libsystem_platform.dylib::_platform_memchr on macOS 26.6.1 (25G76), arm64. Observed and stepped through NEON dup/ldr/sub; disassembly includes 16-byte scan and uminv. Evidence: memchr-inspection.txt.

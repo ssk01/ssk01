@@ -1,0 +1,4 @@
+/build/
+__pycache__/
+data/comments.bin.gz
+data/lengths.bin.gz

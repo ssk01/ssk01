@@ -1,0 +1,223 @@
+Runtime memchr inspection
+Architecture: arm64
+ProductName:		macOS
+ProductVersion:		26.6.1
+BuildVersion:		25G76
+
+Command: python3 inspect_memchr.py
+No timings from this debugger run are used in the benchmark results.
+
+(lldb) disassemble --frame
+demo`libc_c:
+->  0x1000009a0 <+0>:   stp    x24, x23, [sp, #-0x40]!
+    0x1000009a4 <+4>:   stp    x22, x21, [sp, #0x10]
+    0x1000009a8 <+8>:   stp    x20, x19, [sp, #0x20]
+    0x1000009ac <+12>:  stp    x29, x30, [sp, #0x30]
+    0x1000009b0 <+16>:  add    x29, sp, #0x30
+    0x1000009b4 <+20>:  ldr    x9, [x2, #0x8]
+    0x1000009b8 <+24>:  cbz    x9, 0x100000a7c           ; <+220>
+    0x1000009bc <+28>:  mov    x19, x1
+    0x1000009c0 <+32>:  subs   x8, x1, x9
+    0x1000009c4 <+36>:  b.hs   0x1000009e0               ; <+64>
+    0x1000009c8 <+40>:  mov    w0, #0x0                  ; =0
+    0x1000009cc <+44>:  ldp    x29, x30, [sp, #0x30]
+    0x1000009d0 <+48>:  ldp    x20, x19, [sp, #0x20]
+    0x1000009d4 <+52>:  ldp    x22, x21, [sp, #0x10]
+    0x1000009d8 <+56>:  ldp    x24, x23, [sp], #0x40
+    0x1000009dc <+60>:  ret
+    0x1000009e0 <+64>:  adds   x22, x8, #0x1
+    0x1000009e4 <+68>:  b.lo   0x100000a00               ; <+96>
+    0x1000009e8 <+72>:  mov    w0, #0x0                  ; =0
+    0x1000009ec <+76>:  ldp    x29, x30, [sp, #0x30]
+    0x1000009f0 <+80>:  ldp    x20, x19, [sp, #0x20]
+    0x1000009f4 <+84>:  ldp    x22, x21, [sp, #0x10]
+    0x1000009f8 <+88>:  ldp    x24, x23, [sp], #0x40
+    0x1000009fc <+92>:  ret
+    0x100000a00 <+96>:  mov    x20, x0
+    0x100000a04 <+100>: mov    x8, #0x0                  ; =0
+    0x100000a08 <+104>: ldr    x23, [x2]
+    0x100000a0c <+108>: ldrb   w21, [x23], #0x1
+    0x100000a10 <+112>: sub    x24, x9, #0x1
+    0x100000a14 <+116>: b      0x100000a24               ; <+132>
+    0x100000a18 <+120>: mov    w0, #0x0                  ; =0
+    0x100000a1c <+124>: cmp    x8, x22
+    0x100000a20 <+128>: b.hs   0x1000009cc               ; <+44>
+    0x100000a24 <+132>: sub    x2, x22, x8
+    0x100000a28 <+136>: add    x0, x20, x8
+    0x100000a2c <+140>: mov    x1, x21
+    0x100000a30 <+144>: bl     0x100005124               ; symbol stub for: memchr
+    0x100000a34 <+148>: cbz    x0, 0x1000009cc           ; <+44>
+    0x100000a38 <+152>: sub    x8, x0, x20
+    0x100000a3c <+156>: add    x8, x8, #0x1
+    0x100000a40 <+160>: subs   x10, x19, x8
+    0x100000a44 <+164>: b.lo   0x100000a94               ; <+244>
+    0x100000a48 <+168>: cmp    x10, x24
+    0x100000a4c <+172>: csel   x9, x10, x24, lo
+    0x100000a50 <+176>: cmp    x24, x10
+    0x100000a54 <+180>: b.hi   0x100000a18               ; <+120>
+    0x100000a58 <+184>: cbz    x9, 0x100000a7c           ; <+220>
+    0x100000a5c <+188>: add    x10, x20, x8
+    0x100000a60 <+192>: mov    x11, x23
+    0x100000a64 <+196>: ldrb   w12, [x10], #0x1
+    0x100000a68 <+200>: ldrb   w13, [x11], #0x1
+    0x100000a6c <+204>: cmp    w12, w13
+    0x100000a70 <+208>: b.ne   0x100000a18               ; <+120>
+    0x100000a74 <+212>: subs   x9, x9, #0x1
+    0x100000a78 <+216>: b.ne   0x100000a64               ; <+196>
+    0x100000a7c <+220>: mov    w0, #0x1                  ; =1
+    0x100000a80 <+224>: ldp    x29, x30, [sp, #0x30]
+    0x100000a84 <+228>: ldp    x20, x19, [sp, #0x20]
+    0x100000a88 <+232>: ldp    x22, x21, [sp, #0x10]
+    0x100000a8c <+236>: ldp    x24, x23, [sp], #0x40
+    0x100000a90 <+240>: ret
+    0x100000a94 <+244>: adrp   x0, 5
+    0x100000a98 <+248>: add    x0, x0, #0x9c1            ; "string_view::substr"
+    0x100000a9c <+252>: bl     0x100003f5c               ; std::__1::__throw_out_of_range[abi:ne200100](char const*)
+(lldb) script t=lldb.debugger.GetSelectedTarget(); f=t.GetProcess().GetSelectedThread().GetSelectedFrame(); ins=f.GetSymbol().GetInstructions(t); calls=[i for i in ins if i.GetMnemonic(t)=="bl" and "memchr" in (i.GetComment(t) or "")]; assert len(calls)==1; bp=t.BreakpointCreateByAddress(calls[0].GetAddress().GetLoadAddress(t)); print("Call breakpoint:",bp)
+Call breakpoint: SBBreakpoint: id = 2, address = demo[0x0000000100000a30], locations = 1
+(lldb) continue
+Process 60142 resuming
+Process 60142 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 2.1
+    frame #0: 0x0000000100000a30 demo`libc_c(std::__1::basic_string_view<char, std::__1::char_traits<char>>, matching::Pattern const&) + 144
+demo`libc_c:
+->  0x100000a30 <+144>: bl     0x100005124               ; symbol stub for: memchr
+    0x100000a34 <+148>: cbz    x0, 0x1000009cc           ; <+44>
+    0x100000a38 <+152>: sub    x8, x0, x20
+    0x100000a3c <+156>: add    x8, x8, #0x1
+Target 0: (demo) stopped.
+(lldb) thread step-inst
+Process 60142 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = instruction step into
+    frame #0: 0x0000000100005124 demo`memchr
+demo`memchr:
+->  0x100005124 <+0>: adrp   x16, 3
+    0x100005128 <+4>: ldr    x16, [x16, #0x1b8]
+    0x10000512c <+8>: br     x16
+
+demo`memcmp:
+    0x100005130 <+0>: adrp   x16, 3
+Target 0: (demo) stopped.
+(lldb) thread step-inst
+Process 60142 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = instruction step into
+    frame #0: 0x0000000100005128 demo`memchr + 4
+demo`memchr:
+->  0x100005128 <+4>: ldr    x16, [x16, #0x1b8]
+    0x10000512c <+8>: br     x16
+
+demo`memcmp:
+    0x100005130 <+0>: adrp   x16, 3
+    0x100005134 <+4>: ldr    x16, [x16, #0x1c0]
+Target 0: (demo) stopped.
+(lldb) thread step-inst
+Process 60142 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = instruction step into
+    frame #0: 0x000000010000512c demo`memchr + 8
+demo`memchr:
+->  0x10000512c <+8>: br     x16
+
+demo`memcmp:
+    0x100005130 <+0>: adrp   x16, 3
+    0x100005134 <+4>: ldr    x16, [x16, #0x1c0]
+    0x100005138 <+8>: br     x16
+Target 0: (demo) stopped.
+(lldb) thread step-inst
+Process 60142 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = instruction step into
+    frame #0: 0x00000001858aee00 libsystem_platform.dylib`_platform_memchr
+libsystem_platform.dylib`_platform_memchr:
+->  0x1858aee00 <+0>:  tst    x2, x2
+    0x1858aee04 <+4>:  b.eq   0x1858aee5c               ; <+92>
+    0x1858aee08 <+8>:  b.mi   0x1858aee90               ; <+144>
+    0x1858aee0c <+12>: dup.16b v1, w1
+Target 0: (demo) stopped.
+(lldb) image lookup --address $pc
+      Address: libsystem_platform.dylib[0x0000000180506e00] (libsystem_platform.dylib.__TEXT.__text + 1376)
+      Summary: libsystem_platform.dylib`_platform_memchr
+(lldb) register read x1 x2
+      x1 = 0x0000000000000079
+      x2 = 0x0000000000000046
+(lldb) disassemble --frame
+libsystem_platform.dylib`_platform_memchr:
+->  0x1858aee00 <+0>:   tst    x2, x2
+    0x1858aee04 <+4>:   b.eq   0x1858aee5c               ; <+92>
+    0x1858aee08 <+8>:   b.mi   0x1858aee90               ; <+144>
+    0x1858aee0c <+12>:  dup.16b v1, w1
+    0x1858aee10 <+16>:  and    x1, x0, #0xf
+    0x1858aee14 <+20>:  and    x0, x0, #0xfffffffffffffff0
+    0x1858aee18 <+24>:  ldr    q0, [x0]
+    0x1858aee1c <+28>:  sub.16b v0, v0, v1
+    0x1858aee20 <+32>:  adr    x3, 0x1858aede0           ; ___lldb_unnamed_symbol342
+    0x1858aee24 <+36>:  ldr    q3, [x3], #0x10
+    0x1858aee28 <+40>:  sub    x3, x3, x1
+    0x1858aee2c <+44>:  ldr    q2, [x3]
+    0x1858aee30 <+48>:  orr.16b v0, v0, v2
+    0x1858aee34 <+52>:  adds   x2, x2, x1
+    0x1858aee38 <+56>:  b      0x1858aee48               ; <+72>
+    0x1858aee3c <+60>:  nop
+    0x1858aee40 <+64>:  ldr    q0, [x0, #0x10]!
+    0x1858aee44 <+68>:  sub.16b v0, v0, v1
+    0x1858aee48 <+72>:  uminv.16b b2, v0
+    0x1858aee4c <+76>:  fmov   w3, s2
+    0x1858aee50 <+80>:  cbz    w3, 0x1858aee68           ; <+104>
+    0x1858aee54 <+84>:  subs   x2, x2, #0x10
+    0x1858aee58 <+88>:  b.hi   0x1858aee40               ; <+64>
+    0x1858aee5c <+92>:  eor.16b v0, v0, v0
+    0x1858aee60 <+96>:  eor    x0, x0, x0
+    0x1858aee64 <+100>: ret
+    0x1858aee68 <+104>: eor.16b v1, v1, v1
+    0x1858aee6c <+108>: cmhi.16b v0, v0, v1
+    0x1858aee70 <+112>: orr.16b v0, v0, v3
+    0x1858aee74 <+116>: uminv.16b b0, v0
+    0x1858aee78 <+120>: fmov   w3, s0
+    0x1858aee7c <+124>: add    x0, x0, x3
+    0x1858aee80 <+128>: eor    x1, x1, x1
+    0x1858aee84 <+132>: cmp    x3, x2
+    0x1858aee88 <+136>: csel   x0, x1, x0, hs
+    0x1858aee8c <+140>: ret
+    0x1858aee90 <+144>: dup.16b v1, w1
+    0x1858aee94 <+148>: and    x1, x0, #0xf
+    0x1858aee98 <+152>: and    x0, x0, #0xfffffffffffffff0
+    0x1858aee9c <+156>: ldr    q0, [x0]
+    0x1858aeea0 <+160>: sub.16b v0, v0, v1
+    0x1858aeea4 <+164>: adr    x3, 0x1858aede0           ; ___lldb_unnamed_symbol342
+    0x1858aeea8 <+168>: ldr    q3, [x3], #0x10
+    0x1858aeeac <+172>: sub    x3, x3, x1
+    0x1858aeeb0 <+176>: ldr    q2, [x3]
+    0x1858aeeb4 <+180>: orr.16b v0, v0, v2
+    0x1858aeeb8 <+184>: b      0x1858aeec8               ; <+200>
+    0x1858aeebc <+188>: nop
+    0x1858aeec0 <+192>: ldr    q0, [x0, #0x10]!
+    0x1858aeec4 <+196>: sub.16b v0, v0, v1
+    0x1858aeec8 <+200>: uminv.16b b2, v0
+    0x1858aeecc <+204>: fmov   w3, s2
+    0x1858aeed0 <+208>: cbnz   w3, 0x1858aeec0           ; <+192>
+    0x1858aeed4 <+212>: eor.16b v1, v1, v1
+    0x1858aeed8 <+216>: cmhi.16b v0, v0, v1
+    0x1858aeedc <+220>: orr.16b v0, v0, v3
+    0x1858aeee0 <+224>: uminv.16b b0, v0
+    0x1858aeee4 <+228>: fmov   w3, s0
+    0x1858aeee8 <+232>: add    x0, x0, x3
+    0x1858aeeec <+236>: ret
+    0x1858aeef0 <+240>: udf    #0x0
+    0x1858aeef4 <+244>: udf    #0x0
+    0x1858aeef8 <+248>: udf    #0x0
+    0x1858aeefc <+252>: udf    #0x0
+(lldb) thread step-inst --count 8
+Process 60142 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = instruction step into
+    frame #0: 0x00000001858aee20 libsystem_platform.dylib`_platform_memchr + 32
+libsystem_platform.dylib`_platform_memchr:
+->  0x1858aee20 <+32>: adr    x3, 0x1858aede0           ; ___lldb_unnamed_symbol342
+    0x1858aee24 <+36>: ldr    q3, [x3], #0x10
+    0x1858aee28 <+40>: sub    x3, x3, x1
+    0x1858aee2c <+44>: ldr    q2, [x3]
+Target 0: (demo) stopped.
+(lldb) disassemble --start-address $pc --count 4
+libsystem_platform.dylib`_platform_memchr:
+->  0x1858aee20 <+32>: adr    x3, 0x1858aede0           ; ___lldb_unnamed_symbol342
+    0x1858aee24 <+36>: ldr    q3, [x3], #0x10
+    0x1858aee28 <+40>: sub    x3, x3, x1
+    0x1858aee2c <+44>: ldr    q2, [x3]
+(lldb) script print("END_MEMCHR_INSPECTION")

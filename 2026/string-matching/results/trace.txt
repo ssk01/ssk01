@@ -1,0 +1,72 @@
+text=[This one is easy for me: <a href="http://www.youtube.com/watch?v=1u3ekzwnYxw">http://www.youtube.com/watch?v=1u3ekzwnYxw</a><p>The screencast for Scrybe was truly amazing. Cnet described as the "Demo of the Gods."] needle=[youtube] backend=NEON
+prefix: only start 0 -> 0
+suffix: only start 206 -> 0
+scalar contains: try j=0,1,...; compare n[k] at s[j+k]
+ j=0: T/y fail
+ j=1: h/y fail
+ j=2: i/y fail
+ j=3: s/y fail
+ j=4:  /y fail
+ j=5: o/y fail
+ j=6: n/y fail
+ j=7: e/y fail
+ j=8:  /y fail
+ j=9: i/y fail
+ j=10: s/y fail
+ j=11:  /y fail
+ j=12: e/y fail
+ j=13: a/y fail
+ j=14: s/y fail
+ j=15: y/y  /o fail
+ j=16:  /y fail
+ j=17: f/y fail
+ j=18: o/y fail
+ j=19: r/y fail
+ j=20:  /y fail
+ j=21: m/y fail
+ j=22: e/y fail
+ j=23: :/y fail
+ j=24:  /y fail
+ j=25: </y fail
+ j=26: a/y fail
+ j=27:  /y fail
+ j=28: h/y fail
+ j=29: r/y fail
+ j=30: e/y fail
+ j=31: f/y fail
+ j=32: =/y fail
+ j=33: "/y fail
+ j=34: h/y fail
+ j=35: t/y fail
+ j=36: t/y fail
+ j=37: p/y fail
+ j=38: :/y fail
+ j=39: //y fail
+ j=40: //y fail
+ j=41: w/y fail
+ j=42: w/y fail
+ j=43: w/y fail
+ j=44: ./y fail
+ j=45: y/y o/o u/u t/t u/u b/b e/e MATCH
+SIMD contains: each lane is a DIFFERENT start; all lanes compare with n[0]='y'
+ block j=0
+ lane:   0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+ byte:   T  h  i  s     o  n  e     i  s     e  a  s  y
+ hit:    0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  1
+ candidate mask=0x8000 (bit 0 = lane 0)
+ verify start=j+lane=0+15=15, remaining [ for m] vs [outube] -> fail
+ clear lowest candidate bit: mask &= mask - 1 -> 0x0; try remaining candidates in THIS block
+ advance block j += 16
+ block j=16
+ lane:   0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+ byte:      f  o  r     m  e  :     <  a     h  r  e  f
+ hit:    0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+ candidate mask=0x0 (bit 0 = lane 0)
+ advance block j += 16
+ block j=32
+ lane:   0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+ byte:   =  "  h  t  t  p  :  /  /  w  w  w  .  y  o  u
+ hit:    0  0  0  0  0  0  0  0  0  0  0  0  0  1  0  0
+ candidate mask=0x2000 (bit 0 = lane 0)
+ verify start=j+lane=32+13=45, remaining [outube] vs [outube] -> MATCH
+ return true for this row; benchmark increments hit count and proceeds to NEXT ROW

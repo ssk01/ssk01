@@ -1,0 +1,10 @@
+{
+  "source": "https://huggingface.co/datasets/open-index/hacker-news",
+  "selection": "First complete nonempty comment rows in an existing text export, capped at 16 MiB. Export order was not explicitly sorted; it is not a random sample.",
+  "rows": 51204,
+  "text_bytes": 16776695,
+  "sha256_text": "536783f12fae0bf1a787c7c54edb2103e50e6dcc7e84e13678a0f316f69cedde",
+  "sha256_lengths": "df104cfcf936651313bf7539daab6632271bfa38a7ff7ef341b50f6e0810027a",
+  "encoding": "original UTF-8 bytes; HTML entities and markup preserved",
+  "length_format": "little-endian uint32 per row"
+}

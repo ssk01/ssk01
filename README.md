@@ -9,6 +9,7 @@ Learning by doing. Each sub-directory is an independent experiment.
 
 | Project | Language | Description |
 |---------|----------|-------------|
+| [string-matching](2026/string-matching/) | C++ / Python | 从真实 HN 评论筛选 YouTube：逐步讲清 SIMD 候选定位与验证，同词六组实测、词频统计和性能图 |
 | [deepdream](2026/deepdream/) | Python (Jupyter) | 花卉照片 DeepDream：固定 GoogLeNet，通过像素梯度上升生成迷幻纹理，附已执行 Notebook 和离线过程回放 |
 | [paper_reading](2026/paper_reading/) | Markdown | 论文与文章阅读列表：COST、DuckDB、PageRank、Pregel、HNSW、MapReduce；持续记录阅读状态与笔记 |
 | [cost-pagerank-prototype](2026/cost-pagerank-prototype/) | Python (Jupyter) | 《Scalability! But at what COST?》（HotOS 2015）论文研读与本地实验：附[中文译文](2026/cost-pagerank-prototype/cost-paper-zh.md)，通过 PageRank、连通分量与 Hilbert 布局实验，理解“并行系统需要多少资源才能超过高效单线程” |
